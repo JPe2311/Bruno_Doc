@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function role() { return request.auth.token.role; }
+    function isAdmin() { return role() == 'MEDICO'; }
+    function isSecretary() { return role() == 'SECRETARIA'; }
+    function isPatient() { return role() == 'PACIENTE'; }
+
+    match /patients/{uid} {
+      allow read: if isAdmin() || isSecretary() || request.auth.uid == uid;
+      allow write: if isAdmin() || request.auth.uid == uid;
+    }
+
+    match /medical_records/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /appointments/{id} {
+      allow read: if isAdmin() || isSecretary() || request.auth.uid == resource.data.patientUid;
+      allow create: if isAdmin() || isSecretary() || (isPatient() && request.auth.uid == request.resource.data.patientUid);
+      allow update: if isAdmin() || isSecretary();
+    }
+
+    match /catalog_tables/{id} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}
