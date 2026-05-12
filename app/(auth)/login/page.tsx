@@ -1,34 +1,26 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export default function LoginPage() {
   const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (!loading && !checked) {
-      setChecked(true);
-      if (user) {
-        const userData = user as { role?: string; fullName?: string };
-        if (!userData.fullName) {
-          router.replace('/onboarding');
-        } else {
-          router.replace('/dashboard');
-        }
+    if (!loading && user) {
+      const userData = user as { fullName?: string };
+      if (!userData.fullName) {
+        router.push('/onboarding');
+      } else {
+        router.push('/dashboard');
       }
     }
-  }, [user, loading, checked, router]);
+  }, [loading, user, router]);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100">
-      {user ? (
-        <div className="card w-full max-w-md text-center p-8">
-          <p className="text-sm text-slate-500">Redirigiendo...</p>
-        </div>
-      ) : (
+      {!user ? (
         <div className="card w-full max-w-md text-center p-8">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-sky-700">Bruno Doctor</h1>
@@ -47,6 +39,10 @@ export default function LoginPage() {
             </svg>
             Continuar con Google
           </button>
+        </div>
+      ) : (
+        <div className="card w-full max-w-md text-center p-8">
+          <p className="text-slate-500">Redirigiendo...</p>
         </div>
       )}
     </main>
