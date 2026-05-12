@@ -3,14 +3,11 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import {
   User,
   onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '@/lib/firebase/client';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase/client';
 import { Role } from '@/lib/types/domain';
-import toast from 'react-hot-toast';
 
 interface AuthUser extends User {
   role?: Role;
@@ -20,21 +17,18 @@ interface AuthUser extends User {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  signInWithGoogle: async () => {},
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -45,10 +39,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser({
             ...firebaseUser,
             role: userData?.role ?? 'PACIENTE',
-            fullName: userData?.fullName ?? firebaseUser.displayName,
+            fullName: userData?.fullName ?? null,
           } as AuthUser);
         } catch {
-          setUser(firebaseUser as AuthUser);
+          setUser({
+            ...firebaseUser,
+            role: 'PACIENTE',
+            fullName: null,
+          } as AuthUser);
         }
       } else {
         setUser(null);
@@ -58,56 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-          if (!userDoc.exists()) {
-            await setDoc(doc(db, 'users', result.user.uid), {
-              uid: result.user.uid,
-              email: result.user.email,
-              fullName: result.user.displayName,
-              photoURL: result.user.photoURL,
-              role: 'PACIENTE',
-              createdAt: serverTimestamp(),
-            });
-          }
-          toast.success('Sesion iniciada correctamente');
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    });
-  }, []);
-
-  const signInWithGoogle = async () => {
-    if (signingIn) return;
-    setSigningIn(true);
-    try {
-      await signInWithRedirect(auth, googleProvider);
-    } catch (error: unknown) {
-      const code = (error as { code?: string }).code;
-      if (code !== 'auth/cancelled-popup-request' && code !== 'auth/popup-closed-by-user') {
-        const message = error instanceof Error ? error.message : 'Error al iniciar sesion';
-        toast.error(message);
-      }
-      console.error('Sign in error:', error);
-      setSigningIn(false);
-    }
-  };
-
   const signOut = async () => {
-    try {
-      await firebaseSignOut(auth);
-      toast.success('Sesion cerrada');
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
+    await firebaseSignOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -115,9 +69,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   return useContext(AuthContext);
-}
-
-export function useRequireAuth(redirectTo = '/login') {
-  const { user, loading } = useAuth();
-  return { user, loading };
 }
