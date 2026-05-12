@@ -1,11 +1,13 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
-export default function LoginPage() {
+function LoginContent() {
   const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get('redirect') || '/dashboard';
 
   useEffect(() => {
     if (!loading && user) {
@@ -13,10 +15,10 @@ export default function LoginPage() {
       if (!userData.fullName) {
         router.push('/onboarding');
       } else {
-        router.push('/dashboard');
+        router.push(redirect);
       }
     }
-  }, [loading, user, router]);
+  }, [loading, user, router, redirect]);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100">
@@ -46,5 +48,13 @@ export default function LoginPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100"><p className="text-slate-500">Cargando...</p></div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
