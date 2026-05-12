@@ -33,17 +33,22 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        const userData = userDoc.data();
-        setUser({
-          ...firebaseUser,
-          role: userData?.role ?? 'PACIENTE',
-          fullName: userData?.fullName ?? firebaseUser.displayName,
-        } as AuthUser);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          const userData = userDoc.data();
+          setUser({
+            ...firebaseUser,
+            role: userData?.role ?? 'PACIENTE',
+            fullName: userData?.fullName ?? firebaseUser.displayName,
+          } as AuthUser);
+        } catch {
+          setUser(firebaseUser as AuthUser);
+        }
       } else {
         setUser(null);
       }
@@ -53,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const { user: firebaseUser } = result;
@@ -67,18 +74,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           createdAt: serverTimestamp(),
         });
       }
-      toast.success('Sesión iniciada correctamente');
+      toast.success('Sesion iniciada correctamente');
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
-      toast.error(message);
+      const code = (error as { code?: string }).code;
+      if (code !== 'auth/cancelled-popup-request' && code !== 'auth/popup-closed-by-user') {
+        const message = error instanceof Error ? error.message : 'Error al iniciar sesion';
+        toast.error(message);
+      }
       console.error('Sign in error:', error);
+    } finally {
+      setSigningIn(false);
     }
   };
 
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
-      toast.success('Sesión cerrada');
+      toast.success('Sesion cerrada');
     } catch (error) {
       console.error('Sign out error:', error);
     }
