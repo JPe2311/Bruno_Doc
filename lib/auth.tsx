@@ -3,7 +3,8 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import {
   User,
   onAuthStateChanged,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -57,24 +58,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+          if (!userDoc.exists()) {
+            await setDoc(doc(db, 'users', result.user.uid), {
+              uid: result.user.uid,
+              email: result.user.email,
+              fullName: result.user.displayName,
+              photoURL: result.user.photoURL,
+              role: 'PACIENTE',
+              createdAt: serverTimestamp(),
+            });
+          }
+          toast.success('Sesion iniciada correctamente');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+  }, []);
+
   const signInWithGoogle = async () => {
     if (signingIn) return;
     setSigningIn(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const { user: firebaseUser } = result;
-      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, 'users', firebaseUser.uid), {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          fullName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-          role: 'PACIENTE',
-          createdAt: serverTimestamp(),
-        });
-      }
-      toast.success('Sesion iniciada correctamente');
+      await signInWithRedirect(auth, googleProvider);
     } catch (error: unknown) {
       const code = (error as { code?: string }).code;
       if (code !== 'auth/cancelled-popup-request' && code !== 'auth/popup-closed-by-user') {
@@ -82,7 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         toast.error(message);
       }
       console.error('Sign in error:', error);
-    } finally {
       setSigningIn(false);
     }
   };
