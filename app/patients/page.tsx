@@ -91,6 +91,7 @@ export default function PatientsPage() {
                   <th className="pb-3 font-medium">Telefono</th>
                   <th className="pb-3 font-medium">Obra Social</th>
                   <th className="pb-3 font-medium">Email</th>
+                  <th className="pb-3 font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -101,6 +102,14 @@ export default function PatientsPage() {
                     <td className="py-3 text-slate-600">{p.phone}</td>
                     <td className="py-3 text-slate-600">{p.obraSocial || '-'}</td>
                     <td className="py-3 text-slate-600">{p.email}</td>
+                    <td className="py-3">
+                      <a
+                        href={`/pacientes/${p.uid}`}
+                        className="px-3 py-1.5 rounded text-xs font-medium bg-sky-100 text-sky-700 hover:bg-sky-200"
+                      >
+                        Ver Reportes
+                      </a>
+                    </td>
                   </tr>
                 ))}
               </tbody>

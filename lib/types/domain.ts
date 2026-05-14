@@ -37,7 +37,7 @@ export interface MedicalRecord {
 
 export interface CatalogTable {
   id: string;
-  type: 'specialty' | 'service' | 'insurance';
+  type: 'specialty' | 'service' | 'insurance' | 'tipologia';
   name: string;
   active: boolean;
 }
@@ -70,6 +70,7 @@ export interface Caso {
   doctorUid: string;
   doctorName: string;
   date: string;
+  tipologia?: string;
   description: string;
   diagnosis?: string;
   treatment?: string;

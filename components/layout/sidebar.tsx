@@ -9,12 +9,14 @@ const NAV_LINKS = {
     { href: '/appointments', label: 'Citas' },
     { href: '/patients', label: 'Pacientes' },
     { href: '/schedule', label: 'Horarios' },
+    { href: '/casos', label: 'Casos' },
     { href: '/casos/nuevo', label: 'Nuevo Caso' },
   ],
   SECRETARIA: [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/appointments', label: 'Citas' },
     { href: '/patients', label: 'Pacientes' },
+    { href: '/casos', label: 'Casos' },
   ],
   PACIENTE: [
     { href: '/dashboard', label: 'Inicio' },
@@ -56,6 +58,19 @@ export function Sidebar({ role }: { role: string }) {
         ))}
       </nav>
       <div className="border-t pt-3 mt-3 space-y-1">
+        {role === 'MEDICO' && (
+          <Link
+            href="/admin/tipologias"
+            className={`flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors ${
+              pathname === '/admin/tipologias' ? 'bg-sky-50 text-sky-700 font-medium' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+            Tipologias
+          </Link>
+        )}
         <Link
           href="/profile"
           className={`flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors ${

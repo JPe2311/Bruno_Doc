@@ -24,6 +24,7 @@ export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [caseMap, setCaseMap] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -43,8 +44,21 @@ export default function AppointmentsPage() {
           q = query(collection(db, 'appointments'), orderBy('date', 'desc'));
         }
         const snap = await getDocs(q);
-        const filtered = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
-        setAppointments(filtered);
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
+        setAppointments(list);
+
+        if (role === 'PACIENTE') {
+          const casosSnap = await getDocs(query(collection(db, 'casos'), where('patientUid', '==', user.uid)));
+          const casoDates = new Set<string>();
+          casosSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.date) {
+              const dStr = data.date.slice(0, 10);
+              casoDates.add(dStr);
+            }
+          });
+          setCaseMap(casoDates);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -126,6 +140,14 @@ export default function AppointmentsPage() {
                       <p className="text-sm text-slate-600">Paciente: {a.patientName}</p>
                     )}
                     {a.notes && <p className="text-xs text-slate-500 mt-2 italic">{a.notes}</p>}
+                    {role === 'PACIENTE' && isPast(date) && !isToday(date) && caseMap.has(a.date.slice(0, 10)) && (
+                      <a
+                        href={`/pacientes/${user.uid}`}
+                        className="inline-block mt-2 text-xs font-medium text-sky-600 hover:underline"
+                      >
+                        Ver Reporte
+                      </a>
+                    )}
                   </div>
                   <div className={`w-3 h-3 rounded-full ${isToday(date) ? 'bg-blue-500' : isFuture(date) ? 'bg-green-500' : 'bg-slate-300'}`} />
                 </div>

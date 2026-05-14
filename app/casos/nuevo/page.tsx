@@ -1,11 +1,11 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, getDocs, addDoc, where, doc, getDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase/client';
+import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useRouter } from 'next/navigation';
+import { printReportHTML } from '@/lib/printReport';
 import toast from 'react-hot-toast';
 
 interface PatientOption {
@@ -18,12 +18,19 @@ interface PatientOption {
   email: string;
 }
 
+interface TipologiaOption {
+  id: string;
+  name: string;
+}
+
 export default function NuevoCasoPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [search, setSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
+  const [tipologias, setTipologias] = useState<TipologiaOption[]>([]);
+  const [selectedTipologia, setSelectedTipologia] = useState('');
   const [description, setDescription] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -67,6 +74,16 @@ export default function NuevoCasoPage() {
   }, [user]);
 
   useEffect(() => {
+    const fetchTipologias = async () => {
+      const q = query(collection(db, 'catalog_tables'), where('type', '==', 'tipologia'), where('active', '==', true));
+      const snap = await getDocs(q);
+      const list = snap.docs.map((d) => ({ id: d.id, name: d.data().name }));
+      setTipologias(list);
+    };
+    fetchTipologias();
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
     const fetchDoctorAssets = async () => {
       const snap = await getDoc(doc(db, 'users', user.uid));
@@ -80,12 +97,15 @@ export default function NuevoCasoPage() {
   }, [user]);
 
   const handlePrint = () => {
-    window.print();
+    if (reportRef.current) {
+      printReportHTML(reportRef.current.innerHTML);
+    }
   };
 
   const handleNew = () => {
     setSaved(false);
     setSelectedPatient(null);
+    setSelectedTipologia('');
     setDescription('');
     setDiagnosis('');
     setTreatment('');
@@ -116,6 +136,7 @@ export default function NuevoCasoPage() {
         doctorUid: user.uid,
         doctorName: user.fullName,
         date: new Date().toISOString(),
+        tipologia: selectedTipologia,
         description,
         diagnosis,
         treatment,
@@ -132,6 +153,10 @@ export default function NuevoCasoPage() {
     }
   };
 
+  const reportDate = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
   if (authLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
@@ -144,9 +169,9 @@ export default function NuevoCasoPage() {
     <div className="flex">
       <Sidebar role={user.role} />
       <main className="flex-1 p-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">Nuevo Caso de Atencion</h1>
+        <h1 className="no-print text-2xl font-bold text-slate-900 mb-6">Nuevo Caso de Atencion</h1>
 
-        <div className="card mb-6">
+        <div className="no-print card mb-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Seleccionar Paciente</h2>
           <input
             type="text"
@@ -174,7 +199,7 @@ export default function NuevoCasoPage() {
 
         {selectedPatient && (
           <>
-            <div className="card mb-6">
+            <div className="no-print card mb-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos del Paciente</h2>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="font-medium text-slate-600">Nombre:</span> {selectedPatient.fullName}</div>
@@ -186,7 +211,21 @@ export default function NuevoCasoPage() {
               </div>
             </div>
 
-            <div className="card mb-6">
+            <div className="no-print card mb-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Tipologia de Consulta</h2>
+              <select
+                value={selectedTipologia}
+                onChange={(e) => setSelectedTipologia(e.target.value)}
+                className="w-full rounded border border-slate-200 p-2.5 text-sm"
+              >
+                <option value="">Seleccionar tipologia...</option>
+                {tipologias.map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="no-print card mb-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Detalle de la Atencion</h2>
               <div className="space-y-4">
                 <label className="block">
@@ -232,67 +271,70 @@ export default function NuevoCasoPage() {
               </div>
             </div>
 
-            <div className="card mb-6 report-preview" ref={reportRef}>
+            <div className="card mb-6" ref={reportRef}>
               <h2 className="text-lg font-semibold text-slate-900 mb-4 no-print">Vista Previa del Reporte</h2>
-              <div className="border rounded-lg overflow-hidden bg-white">
-                {bannerURL && (
-                  <img src={bannerURL} alt="Banner" className="w-full h-auto max-h-48 object-cover" />
-                )}
-                {!bannerURL && (
-                  <div className="h-20 bg-gradient-to-r from-sky-600 to-sky-400 flex items-center justify-center">
-                    <p className="text-white font-bold text-lg">BRUNO DOCTOR</p>
+              {bannerURL && (
+                <img src={bannerURL} alt="Banner" className="w-full h-auto max-h-48 object-cover" />
+              )}
+              {!bannerURL && (
+                <div className="h-20 bg-gradient-to-r from-sky-600 to-sky-400 flex items-center justify-center">
+                  <p className="text-white font-bold text-lg">BRUNO DOCTOR</p>
+                </div>
+              )}
+              <div className="p-6 space-y-4">
+                <div className="text-right text-sm text-slate-500">
+                  {reportDate}
+                </div>
+                {selectedTipologia && (
+                  <div>
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                      {selectedTipologia}
+                    </span>
                   </div>
                 )}
-                <div className="p-6 space-y-4">
-                  <div className="text-right text-sm text-slate-500">
-                    {new Date().toLocaleDateString('es-ES', {
-                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                    })}
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold text-slate-900 mb-2">Datos del Paciente</h3>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <p><span className="font-medium">Nombre:</span> {selectedPatient.fullName}</p>
+                    <p><span className="font-medium">DNI:</span> {selectedPatient.dni}</p>
+                    <p><span className="font-medium">Obra Social:</span> {selectedPatient.obraSocial || '-'}</p>
+                    <p><span className="font-medium">Telefono:</span> {selectedPatient.phone}</p>
+                    <p><span className="font-medium">Direccion:</span> {selectedPatient.address}</p>
                   </div>
+                </div>
+                {description && (
                   <div className="border-t pt-4">
-                    <h3 className="font-semibold text-slate-900 mb-2">Datos del Paciente</h3>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                      <p><span className="font-medium">Nombre:</span> {selectedPatient.fullName}</p>
-                      <p><span className="font-medium">DNI:</span> {selectedPatient.dni}</p>
-                      <p><span className="font-medium">Obra Social:</span> {selectedPatient.obraSocial || '-'}</p>
-                      <p><span className="font-medium">Telefono:</span> {selectedPatient.phone}</p>
-                      <p><span className="font-medium">Direccion:</span> {selectedPatient.address}</p>
-                    </div>
+                    <h3 className="font-semibold text-slate-900 mb-2">Registro de Atencion</h3>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{description}</p>
                   </div>
-                  {description && (
-                    <div className="border-t pt-4">
-                      <h3 className="font-semibold text-slate-900 mb-2">Registro de Atencion</h3>
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{description}</p>
-                    </div>
-                  )}
-                  {diagnosis && (
-                    <div className="border-t pt-4">
-                      <h3 className="font-semibold text-slate-900 mb-2">Diagnostico</h3>
-                      <p className="text-sm text-slate-700">{diagnosis}</p>
-                    </div>
-                  )}
-                  {treatment && (
-                    <div className="border-t pt-4">
-                      <h3 className="font-semibold text-slate-900 mb-2">Tratamiento</h3>
-                      <p className="text-sm text-slate-700">{treatment}</p>
-                    </div>
-                  )}
-                  {notes && (
-                    <div className="border-t pt-4">
-                      <h3 className="font-semibold text-slate-900 mb-2">Notas</h3>
-                      <p className="text-sm text-slate-700">{notes}</p>
-                    </div>
-                  )}
-                  <div className="border-t pt-4 flex justify-end">
-                    {stampURL ? (
-                      <img src={stampURL} alt="Sello del doctor" className="h-20 object-contain" />
-                    ) : (
-                      <div className="text-right">
-                        <p className="font-semibold text-slate-900">{user.fullName}</p>
-                        <p className="text-sm text-slate-500">Medico</p>
-                      </div>
-                    )}
+                )}
+                {diagnosis && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-slate-900 mb-2">Diagnostico</h3>
+                    <p className="text-sm text-slate-700">{diagnosis}</p>
                   </div>
+                )}
+                {treatment && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-slate-900 mb-2">Tratamiento</h3>
+                    <p className="text-sm text-slate-700">{treatment}</p>
+                  </div>
+                )}
+                {notes && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-slate-900 mb-2">Notas</h3>
+                    <p className="text-sm text-slate-700">{notes}</p>
+                  </div>
+                )}
+                <div className="border-t pt-4 flex justify-end">
+                  {stampURL ? (
+                    <img src={stampURL} alt="Sello del doctor" className="h-20 object-contain" />
+                  ) : (
+                    <div className="text-right">
+                      <p className="font-semibold text-slate-900">{user.fullName}</p>
+                      <p className="text-sm text-slate-500">Medico</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -301,12 +343,12 @@ export default function NuevoCasoPage() {
               <button
                 onClick={handleSave}
                 disabled={saving || !description}
-                className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className="no-print w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
               >
                 {saving ? 'Guardando...' : 'Guardar Caso'}
               </button>
             ) : (
-              <div className="flex gap-3 no-print">
+              <div className="no-print flex gap-3">
                 <button
                   onClick={handlePrint}
                   className="flex-1 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700"
