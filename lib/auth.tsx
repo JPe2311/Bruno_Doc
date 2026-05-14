@@ -1,17 +1,16 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
-import {
-  User,
-  onAuthStateChanged,
-  signOut as firebaseSignOut,
-} from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/client';
 import { Role } from '@/lib/types/domain';
 
-interface AuthUser extends User {
-  role?: Role;
-  fullName?: string;
+interface AuthUser {
+  uid: string;
+  email: string | null;
+  fullName: string | null;
+  photoURL: string | null;
+  role: Role;
 }
 
 interface AuthContextType {
@@ -31,33 +30,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 5000);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(timeout);
+      if (cancelled) return;
       if (firebaseUser) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          const userData = userDoc.data();
-          setUser({
-            ...firebaseUser,
-            role: userData?.role ?? 'PACIENTE',
-            fullName: userData?.fullName ?? null,
-          } as AuthUser);
-        } catch {
-          setUser({
-            ...firebaseUser,
-            role: 'PACIENTE',
-            fullName: null,
-          } as AuthUser);
+          const ref = doc(db, 'users', firebaseUser.uid);
+          const snap = await getDoc(ref);
+          if (!snap.exists()) {
+            const data = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              fullName: firebaseUser.displayName || null,
+              photoURL: firebaseUser.photoURL || null,
+              role: 'PACIENTE' as Role,
+              createdAt: new Date().toISOString(),
+            };
+            await setDoc(ref, data);
+            setUser(data);
+          } else {
+            const data = snap.data() as AuthUser;
+            setUser({ ...data, uid: firebaseUser.uid });
+          }
+        } catch (e) {
+          console.error('Auth error:', e);
+          setUser(null);
         }
       } else {
         setUser(null);
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     });
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
     await firebaseSignOut(auth);
+    setUser(null);
   };
 
   return (
