@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
+import { signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 
 export default function LoginPage() {
@@ -10,12 +10,6 @@ export default function LoginPage() {
   const router = useRouter();
   const [clicked, setClicked] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  useEffect(() => {
-    getRedirectResult(auth).catch((err) => {
-      console.error('Redirect result error:', err);
-    });
-  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -38,6 +32,7 @@ export default function LoginPage() {
       await signInWithRedirect(auth, provider);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al iniciar sesion';
+      console.error('Login error:', err);
       setErrorMsg(msg);
       setClicked(false);
     }
