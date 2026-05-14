@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 
 export default function LoginPage() {
@@ -29,11 +29,17 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithRedirect(auth, provider);
+      await signInWithPopup(auth, provider);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al iniciar sesion';
-      console.error('Login error:', err);
-      setErrorMsg(msg);
+      const e = err as { code?: string; message?: string };
+      if (e.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Ventana cerrada. Intente de nuevo.');
+      } else if (e.code === 'auth/popup-blocked') {
+        setErrorMsg('Permita ventanas emergentes (popups) para este sitio e intente de nuevo.');
+      } else {
+        setErrorMsg(e.message || 'Error al iniciar sesion');
+      }
+      console.error('Login error:', e.code || e);
       setClicked(false);
     }
   };
