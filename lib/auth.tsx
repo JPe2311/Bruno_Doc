@@ -39,24 +39,28 @@ async function fetchUserDoc(firebaseUser: User): Promise<AuthUser> {
   const ref = doc(db, 'users', firebaseUser.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
-    const data = {
+    const data: AuthUser = {
       uid: firebaseUser.uid,
       email: firebaseUser.email || '',
       fullName: firebaseUser.displayName || '',
       photoURL: firebaseUser.photoURL || null,
-      role: 'PACIENTE' as Role,
+      role: 'PACIENTE',
       phone: '',
       address: '',
       dni: '',
       obraSocial: '',
       stampURL: '',
       bannerURL: '',
-      createdAt: new Date().toISOString(),
     };
-    await setDoc(ref, data);
+    await setDoc(ref, { ...data, createdAt: new Date().toISOString() });
     return data;
   }
-  return { ...(snap.data() as AuthUser), uid: firebaseUser.uid };
+  const existingData = snap.data() as AuthUser;
+  if (!existingData.role) {
+    await setDoc(ref, { role: 'PACIENTE' }, { merge: true });
+    return { ...existingData, role: 'PACIENTE', uid: firebaseUser.uid };
+  }
+  return { ...existingData, uid: firebaseUser.uid };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
