@@ -67,6 +67,7 @@ export default function SchedulePage() {
     try {
       await setDoc(doc(db, 'schedules', user.uid), {
         doctorUid: user.uid,
+        doctorName: user.fullName,
         enabledDays,
         timeSlots: selectedSlots.map((start) => ({
           start,

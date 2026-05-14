@@ -73,22 +73,17 @@ function BookAppointmentContent() {
   useEffect(() => {
     if (!user) return;
     const fetchDoctorInfo = async () => {
-      const q = query(collection(db, 'users'), where('role', '==', 'MEDICO'));
+      const q = query(collection(db, 'schedules'));
       const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docData = snap.docs[0];
-        setDoctorUid(docData.id);
-        setDoctorName(docData.data().fullName || 'Dr. Bruno');
-
-        const scheduleRef = doc(db, 'schedules', docData.id);
-        const scheduleSnap = await getDoc(scheduleRef);
-        if (scheduleSnap.exists()) {
-          const data = scheduleSnap.data();
-          if (data.enabledDays) setEnabledDays(data.enabledDays);
-          if (data.timeSlots) {
-            setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
-          }
+      for (const scheduleDoc of snap.docs) {
+        const data = scheduleDoc.data();
+        setDoctorUid(scheduleDoc.id);
+        setDoctorName(data.doctorName || 'Dr. Bruno');
+        if (data.enabledDays) setEnabledDays(data.enabledDays);
+        if (data.timeSlots) {
+          setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
         }
+        break;
       }
     };
     fetchDoctorInfo();

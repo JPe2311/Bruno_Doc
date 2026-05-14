@@ -11,12 +11,8 @@ service cloud.firestore {
     function isPatient() { return getRole() == 'PACIENTE'; }
 
     match /users/{uid} {
-      allow read, write: if isLoggedIn() && request.auth.uid == uid;
-    }
-
-    match /patients/{uid} {
-      allow read: if isAdmin() || isSecretary() || request.auth.uid == uid;
-      allow write: if isAdmin() || request.auth.uid == uid;
+      allow read: if isLoggedIn() && (request.auth.uid == uid || isAdmin() || isSecretary());
+      allow write: if isLoggedIn() && request.auth.uid == uid;
     }
 
     match /medical_records/{id} {
