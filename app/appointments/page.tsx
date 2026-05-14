@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -35,16 +35,15 @@ export default function AppointmentsPage() {
     if (!user) return;
     const fetchAppointments = async () => {
       try {
-        const q = query(collection(db, 'appointments'), orderBy('date', 'desc'));
-        const snap = await getDocs(q);
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
         const role = (user as { role?: string }).role;
-        
-        let filtered = all;
+        let q;
         if (role === 'PACIENTE') {
-          filtered = all.filter(a => a.patientUid === user.uid);
+          q = query(collection(db, 'appointments'), where('patientUid', '==', user.uid), orderBy('date', 'desc'));
+        } else {
+          q = query(collection(db, 'appointments'), orderBy('date', 'desc'));
         }
-        
+        const snap = await getDocs(q);
+        const filtered = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
         setAppointments(filtered);
       } catch (e) {
         console.error(e);

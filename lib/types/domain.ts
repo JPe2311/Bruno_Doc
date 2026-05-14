@@ -5,6 +5,7 @@ export interface Patient {
   phone: string;
   address: string;
   dni: string;
+  obraSocial: string;
   role: Role;
   createdAt?: string;
 }
@@ -39,6 +40,41 @@ export interface CatalogTable {
   type: 'specialty' | 'service' | 'insurance';
   name: string;
   active: boolean;
+}
+
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface TimeSlot {
+  start: string;
+  end: string;
+}
+
+export interface DoctorSchedule {
+  doctorUid: string;
+  enabledDays: Record<DayOfWeek, boolean>;
+  timeSlots: TimeSlot[];
+  slotDuration: number;
+}
+
+export interface Caso {
+  id: string;
+  patientUid: string;
+  patientData: {
+    fullName: string;
+    dni: string;
+    obraSocial: string;
+    address: string;
+    phone: string;
+    email: string;
+  };
+  doctorUid: string;
+  doctorName: string;
+  date: string;
+  description: string;
+  diagnosis?: string;
+  treatment?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export type Role = 'MEDICO' | 'SECRETARIA' | 'PACIENTE';

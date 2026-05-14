@@ -5,12 +5,18 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/client';
 import { Role } from '@/lib/types/domain';
 
-interface AuthUser {
+export interface AuthUser {
   uid: string;
-  email: string | null;
-  fullName: string | null;
+  email: string;
+  fullName: string;
   photoURL: string | null;
   role: Role;
+  phone: string;
+  address: string;
+  dni: string;
+  obraSocial: string;
+  stampURL: string;
+  bannerURL: string;
 }
 
 interface AuthContextType {
@@ -46,9 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const data = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              fullName: firebaseUser.displayName || null,
+              fullName: firebaseUser.displayName || '',
               photoURL: firebaseUser.photoURL || null,
               role: 'PACIENTE' as Role,
+              phone: '',
+              address: '',
+              dni: '',
+              obraSocial: '',
+              stampURL: '',
+              bannerURL: '',
               createdAt: new Date().toISOString(),
             };
             await setDoc(ref, data);
