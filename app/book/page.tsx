@@ -241,7 +241,7 @@ function BookAppointmentContent() {
                       <button
                         key={time}
                         disabled={isBusy}
-                        onClick={() => setSelectedTime(time)}
+                        onClick={() => { setSelectedTime(time); setStep(3); }}
                         className={`py-2 px-3 rounded text-sm transition-colors ${
                           isBusy ? 'bg-slate-100 text-slate-300 line-through cursor-not-allowed'
                           : isSelected ? 'bg-sky-600 text-white'
