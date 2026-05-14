@@ -220,11 +220,27 @@ export default function AppointmentsPage() {
                     {isDoctor && isPending && (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleUpdateStatus(a.id, 'confirmed')}
+                          onClick={async () => {
+                            await handleUpdateStatus(a.id, 'confirmed');
+                            let patientPhone = '';
+                            try {
+                              const patientSnap = await getDoc(doc(db, 'users', a.patientUid));
+                              if (patientSnap.exists()) {
+                                patientPhone = (patientSnap.data().phone || '').replace(/\D/g, '');
+                              }
+                            } catch {}
+                            if (patientPhone && doctorClinic.address) {
+                              const dateStr = format(date, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+                              let message = `Hola ${a.patientName}, tu cita con ${a.doctorName} ha sido CONFIRMADA para el ${dateStr}.`;
+                              message += ` Direccion: ${doctorClinic.address}.`;
+                              if (doctorClinic.maps) message += ` Ver en mapa: ${doctorClinic.maps}`;
+                              window.open(`https://wa.me/${patientPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                            }
+                          }}
                           disabled={processingId === a.id}
                           className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                         >
-                          Aceptar
+                          Aceptar y Enviar WhatsApp
                         </button>
                         <button
                           onClick={() => handleUpdateStatus(a.id, 'cancelled')}
