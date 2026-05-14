@@ -1,24 +1,47 @@
 'use client';
-import { useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { auth } from '@/lib/firebase/client';
+import toast from 'react-hot-toast';
 
-function LoginContent() {
-  const { user, loading, signInWithGoogle } = useAuth();
+export default function LoginPage() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect') || '/dashboard';
+  const [clicked, setClicked] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      const userData = user as { fullName?: string };
-      if (!userData.fullName) {
-        router.push('/onboarding');
+    if (loading) return;
+    if (user) {
+      if (!user.fullName) {
+        router.replace('/onboarding');
       } else {
-        router.push(redirect);
+        router.replace('/dashboard');
       }
     }
-  }, [loading, user, router, redirect]);
+  }, [user, loading, router]);
+
+  const handleLogin = async () => {
+    if (clicked) return;
+    setClicked(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+      setClicked(false);
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      const code = err.code;
+      if (code === 'auth/popup-blocked') {
+        toast.error('Popup bloqueado. Permite popups para este sitio.');
+      } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        console.error(e);
+        toast.error('Error al iniciar sesion');
+      }
+      setClicked(false);
+    }
+  };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100">
@@ -29,8 +52,8 @@ function LoginContent() {
             <p className="text-slate-500 mt-2">Sistema de gestion medica</p>
           </div>
           <button
-            onClick={signInWithGoogle}
-            disabled={loading}
+            onClick={handleLogin}
+            disabled={clicked}
             className="w-full flex items-center justify-center gap-3 rounded-lg bg-white border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -48,13 +71,5 @@ function LoginContent() {
         </div>
       )}
     </main>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100"><p className="text-slate-500">Cargando...</p></div>}>
-      <LoginContent />
-    </Suspense>
   );
 }
