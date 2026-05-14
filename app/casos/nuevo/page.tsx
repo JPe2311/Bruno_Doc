@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, query, getDocs, addDoc, where, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase/client';
@@ -29,8 +29,11 @@ export default function NuevoCasoPage() {
   const [treatment, setTreatment] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [bannerURL, setBannerURL] = useState('');
   const [stampURL, setStampURL] = useState('');
+
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -76,6 +79,20 @@ export default function NuevoCasoPage() {
     fetchDoctorAssets();
   }, [user]);
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleNew = () => {
+    setSaved(false);
+    setSelectedPatient(null);
+    setDescription('');
+    setDiagnosis('');
+    setTreatment('');
+    setNotes('');
+    setSearch('');
+  };
+
   const filteredPatients = patients.filter(
     (p) =>
       p.fullName.toLowerCase().includes(search.toLowerCase()) ||
@@ -106,11 +123,7 @@ export default function NuevoCasoPage() {
         createdAt: new Date().toISOString(),
       });
       toast.success('Caso registrado correctamente');
-      setSelectedPatient(null);
-      setDescription('');
-      setDiagnosis('');
-      setTreatment('');
-      setNotes('');
+      setSaved(true);
     } catch (err) {
       console.error(err);
       toast.error('Error al registrar el caso');
@@ -219,8 +232,8 @@ export default function NuevoCasoPage() {
               </div>
             </div>
 
-            <div className="card mb-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Vista Previa del Reporte</h2>
+            <div className="card mb-6 report-preview" ref={reportRef}>
+              <h2 className="text-lg font-semibold text-slate-900 mb-4 no-print">Vista Previa del Reporte</h2>
               <div className="border rounded-lg overflow-hidden bg-white">
                 {bannerURL && (
                   <img src={bannerURL} alt="Banner" className="w-full h-auto max-h-48 object-cover" />
@@ -284,13 +297,30 @@ export default function NuevoCasoPage() {
               </div>
             </div>
 
-            <button
-              onClick={handleSave}
-              disabled={saving || !description}
-              className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-            >
-              {saving ? 'Guardando...' : 'Guardar Caso'}
-            </button>
+            {!saved ? (
+              <button
+                onClick={handleSave}
+                disabled={saving || !description}
+                className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {saving ? 'Guardando...' : 'Guardar Caso'}
+              </button>
+            ) : (
+              <div className="flex gap-3 no-print">
+                <button
+                  onClick={handlePrint}
+                  className="flex-1 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700"
+                >
+                  Imprimir / PDF
+                </button>
+                <button
+                  onClick={handleNew}
+                  className="flex-1 rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-medium text-sky-700 hover:bg-sky-50"
+                >
+                  Nuevo Caso
+                </button>
+              </div>
+            )}
           </>
         )}
       </main>

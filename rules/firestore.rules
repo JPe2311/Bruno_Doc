@@ -11,7 +11,7 @@ service cloud.firestore {
     function isPatient() { return getRole() == 'PACIENTE'; }
 
     match /users/{uid} {
-      allow read: if isLoggedIn() && (request.auth.uid == uid || isAdmin() || isSecretary());
+      allow read: if isLoggedIn();
       allow write: if isLoggedIn() && request.auth.uid == uid;
     }
 
@@ -38,10 +38,10 @@ service cloud.firestore {
     }
 
     match /casos/{caseId} {
-      allow read: if isAdmin() || request.auth.uid == resource.data.patientUid;
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn();
+      allow update: if isLoggedIn();
+      allow delete: if isLoggedIn();
     }
 
     match /catalog_tables/{id} {

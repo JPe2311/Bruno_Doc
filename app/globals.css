@@ -4,3 +4,10 @@
 
 body { @apply bg-slate-50 text-slate-900; }
 .card { @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm; }
+
+@media print {
+  body { background: white; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .report-preview { border: none !important; box-shadow: none !important; padding: 0 !important; }
+}
