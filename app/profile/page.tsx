@@ -19,6 +19,8 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     fullName: '', email: '', phone: '', address: '', dni: '', obraSocial: '',
   });
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [clinicMaps, setClinicMaps] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -47,6 +49,8 @@ export default function ProfilePage() {
         const data = snap.data();
         if (data.bannerURL) setBannerURL(data.bannerURL);
         if (data.stampURL) setStampURL(data.stampURL);
+        if (data.clinicAddress) setClinicAddress(data.clinicAddress);
+        if (data.clinicMaps) setClinicMaps(data.clinicMaps);
       }
     };
     fetchAssets();
@@ -61,7 +65,12 @@ export default function ProfilePage() {
     if (!user || saving) return;
     setSaving(true);
     try {
-      await setDoc(doc(db, 'users', user.uid), { ...form }, { merge: true });
+      const updateData: Record<string, string> = { ...form };
+      if (user.role === 'MEDICO') {
+        updateData.clinicAddress = clinicAddress;
+        updateData.clinicMaps = clinicMaps;
+      }
+      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
       toast.success('Perfil actualizado correctamente');
     } catch (err) {
       console.error(err);
@@ -137,7 +146,7 @@ export default function ProfilePage() {
           </button>
         </form>
 
-        {user.role === 'MEDICO' && (
+        {(user.role === 'MEDICO' || (user as { role?: string }).role === 'MEDICO') && (
           <>
             <div className="card space-y-4">
               <h2 className="text-lg font-semibold text-slate-900">Banner del Reporte</h2>
@@ -181,6 +190,29 @@ export default function ProfilePage() {
                 />
               </label>
               {uploadingStamp && <p className="text-sm text-sky-600">Subiendo sello...</p>}
+            </div>
+
+            <div className="card space-y-4">
+              <h2 className="text-lg font-semibold text-slate-900">Datos del Consultorio</h2>
+              <p className="text-sm text-slate-500">Estos datos se usaran para confirmar las citas por WhatsApp.</p>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-slate-700">Direccion del consultorio</span>
+                <input
+                  value={clinicAddress}
+                  onChange={(e) => setClinicAddress(e.target.value)}
+                  placeholder="Ej: Av. Principal 123, Buenos Aires"
+                  className="w-full rounded border border-slate-200 p-2.5 text-sm"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-slate-700">Link de Google Maps</span>
+                <input
+                  value={clinicMaps}
+                  onChange={(e) => setClinicMaps(e.target.value)}
+                  placeholder="Ej: https://goo.gl/maps/xxxxx"
+                  className="w-full rounded border border-slate-200 p-2.5 text-sm"
+                />
+              </label>
             </div>
           </>
         )}
