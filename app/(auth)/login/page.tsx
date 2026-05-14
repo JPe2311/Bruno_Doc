@@ -2,9 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
-import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const { user, loading } = useAuth();
@@ -25,22 +24,9 @@ export default function LoginPage() {
   const handleLogin = async () => {
     if (clicked) return;
     setClicked(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
-      setClicked(false);
-    } catch (e: unknown) {
-      const err = e as { code?: string };
-      const code = err.code;
-      if (code === 'auth/popup-blocked') {
-        toast.error('Popup bloqueado. Permite popups para este sitio.');
-      } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        console.error(e);
-        toast.error('Error al iniciar sesion');
-      }
-      setClicked(false);
-    }
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await signInWithRedirect(auth, provider);
   };
 
   return (
