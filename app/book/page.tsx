@@ -131,7 +131,18 @@ function BookAppointmentContent() {
   }, [selectedDate]);
 
   const handleBook = async () => {
-    if (!user || !selectedDate || !selectedTime || !appointmentType) return;
+    if (!user || !selectedDate || !selectedTime || !appointmentType) {
+      toast.error('Por favor complete todos los datos');
+      return;
+    }
+    if (!doctorUid) {
+      toast.error('No se ha configurado el medico. Contacte al administrador.');
+      return;
+    }
+    if (busySlots.includes(selectedTime)) {
+      toast.error('Este horario ya no esta disponible');
+      return;
+    }
     setLoading(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -145,7 +156,7 @@ function BookAppointmentContent() {
         doctorName,
         date: dateTime,
         durationMinutes: 30,
-        status: 'scheduled',
+        status: 'pending',
         type: APPOINTMENT_TYPES.find(t => t.value === appointmentType)?.label || appointmentType,
         notes: notes || '',
         createdAt: new Date().toISOString(),
@@ -158,7 +169,7 @@ function BookAppointmentContent() {
         appointmentId: appointmentRef.id,
       });
       await batch.commit();
-      toast.success('Cita reservada correctamente!');
+      toast.success('Cita solicitada! Pendiente de confirmacion por el medico.');
       router.push('/appointments');
     } catch (err) {
       console.error(err);
@@ -233,7 +244,7 @@ function BookAppointmentContent() {
                 <p className="text-sm text-slate-500 mb-3">
                   Horarios disponibles para {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
                 </p>
-                <div className="grid grid-cols-6 gap-2">
+                <div className="space-y-2">
                   {availableSlots.map((time) => {
                     const isBusy = busySlots.includes(time);
                     const isSelected = selectedTime === time;
@@ -242,7 +253,7 @@ function BookAppointmentContent() {
                         key={time}
                         disabled={isBusy}
                         onClick={() => { setSelectedTime(time); setStep(3); }}
-                        className={`py-2 px-3 rounded text-sm transition-colors ${
+                        className={`w-full py-2 px-4 rounded text-sm text-left transition-colors ${
                           isBusy ? 'bg-slate-100 text-slate-300 line-through cursor-not-allowed'
                           : isSelected ? 'bg-sky-600 text-white'
                           : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
