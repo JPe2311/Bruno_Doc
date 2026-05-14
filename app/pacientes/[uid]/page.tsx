@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { collection, query, getDocs, getDoc, doc, where, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, doc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -113,9 +113,11 @@ export default function PatientDetailPage() {
         }
 
         const casosSnap = await getDocs(
-          query(collection(db, 'casos'), where('patientUid', '==', patientUid), orderBy('createdAt', 'desc'))
+          query(collection(db, 'casos'), where('patientUid', '==', patientUid))
         );
-        const casosList = casosSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Caso & { id: string }));
+        const casosList = casosSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Caso & { id: string }))
+          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setCasos(casosList);
 
         const doctorUids = [...new Set(casosList.map((c) => c.doctorUid))];
@@ -200,19 +202,35 @@ export default function PatientDetailPage() {
               {casos.length === 0 ? (
                 <p className="text-slate-500">No hay reportes registrados para este paciente</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {casos.map((c) => {
-                    const assets = doctorAssets[c.doctorUid] || { stampURL: '', bannerURL: '' };
                     const fecha = c.createdAt || c.date;
                     return (
-                      <div key={c.id} className="border rounded-lg overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-500">
-                              {fecha ? format(parseISO(fecha), "EEEE d 'de' MMMM 'de' yyyy", { locale: es }) : '-'}
-                            </span>
+                      <div key={c.id} className="border rounded-lg p-4">
+                        <div className="grid grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Fecha</p>
+                            <p className="text-slate-700">
+                              {fecha ? format(parseISO(fecha), "dd/MM/yyyy") : '-'}
+                            </p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Motivo</p>
+                            <p className="text-slate-700 line-clamp-2">
+                              {c.description || c.diagnosis || '-'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Tratamiento</p>
+                            <p className="text-slate-700 line-clamp-2">
+                              {c.treatment || '-'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                          <div className="flex items-center gap-2">
                             {c.tipologia && (
-                              <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
                                 {c.tipologia}
                               </span>
                             )}
@@ -222,47 +240,8 @@ export default function PatientDetailPage() {
                             onClick={() => handlePrint(c)}
                             className="px-3 py-1.5 rounded text-xs font-medium bg-sky-600 text-white hover:bg-sky-700"
                           >
-                            Imprimir / PDF
+                            Ver Reporte
                           </button>
-                        </div>
-                        <div className="p-4">
-                          {assets.bannerURL && (
-                            <img src={assets.bannerURL} alt="Banner" className="w-full h-auto max-h-32 object-cover rounded mb-3" />
-                          )}
-                          {c.description && (
-                            <div className="mb-2">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Motivo de Consulta</h4>
-                              <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.description}</p>
-                            </div>
-                          )}
-                          {c.diagnosis && (
-                            <div className="mb-2">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Diagnostico</h4>
-                              <p className="text-sm text-slate-700">{c.diagnosis}</p>
-                            </div>
-                          )}
-                          {c.treatment && (
-                            <div className="mb-2">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tratamiento</h4>
-                              <p className="text-sm text-slate-700">{c.treatment}</p>
-                            </div>
-                          )}
-                          {c.notes && (
-                            <div className="mb-2">
-                              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Notas</h4>
-                              <p className="text-sm text-slate-700">{c.notes}</p>
-                            </div>
-                          )}
-                          <div className="flex justify-end mt-3">
-                            {assets.stampURL ? (
-                              <img src={assets.stampURL} alt="Sello" className="h-16 object-contain" />
-                            ) : (
-                              <div className="text-right">
-                                <p className="font-semibold text-sm text-slate-900">{c.doctorName}</p>
-                                <p className="text-xs text-slate-500">Medico</p>
-                              </div>
-                            )}
-                          </div>
                         </div>
                       </div>
                     );

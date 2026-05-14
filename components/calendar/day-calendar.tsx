@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
+  pending: 'border-l-orange-400 bg-orange-50',
   scheduled: 'border-l-blue-400 bg-blue-50',
   confirmed: 'border-l-green-400 bg-green-50',
   in_progress: 'border-l-yellow-400 bg-yellow-50',
@@ -13,12 +14,13 @@ const STATUS_COLORS: Record<AppointmentStatus, string> = {
 };
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
+  pending: 'Pendiente',
   scheduled: 'Programada',
   confirmed: 'Confirmada',
   in_progress: 'En progreso',
   completed: 'Completada',
   cancelled: 'Cancelada',
-  no_show: 'No asistió',
+  no_show: 'No asistio',
 };
 
 export function DayCalendar({ appointments }: { appointments: Appointment[] }) {

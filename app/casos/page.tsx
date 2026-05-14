@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, getDocs, orderBy, getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -101,11 +101,13 @@ export default function CasosListPage() {
     const fetchData = async () => {
       try {
         const [casosSnap, tipologiasSnap] = await Promise.all([
-          getDocs(query(collection(db, 'casos'), orderBy('createdAt', 'desc'))),
-          getDocs(query(collection(db, 'catalog_tables'))),
+          getDocs(collection(db, 'casos')),
+          getDocs(collection(db, 'catalog_tables')),
         ]);
 
-        const casosList = casosSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Caso & { id: string }));
+        const casosList = casosSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Caso & { id: string }))
+          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setCasos(casosList);
         setFilteredCasos(casosList);
 
@@ -133,14 +135,6 @@ export default function CasosListPage() {
     }
     setFilteredCasos(result);
   }, [filterTipologia, filterPatient, casos]);
-
-  const loadDoctorAsset = async (doctorUid: string) => {
-    if (doctorAssets[doctorUid]) return;
-    try {
-      const snap = await getDocs(doc(db, 'users', doctorUid));
-      // Already loaded via import
-    } catch {}
-  };
 
   const handleViewReport = async (caso: Caso & { id: string }) => {
     setSelectedCaso(caso);

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
@@ -49,7 +50,14 @@ export default function LoginPage() {
       {!user ? (
         <div className="card w-full max-w-md text-center p-8">
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-sky-700">Bruno Doctor</h1>
+            <div className="relative w-48 h-16 mx-auto">
+              <Image
+                src="/logo_bruno.png"
+                alt="Bruno Doctor"
+                fill
+                className="object-contain"
+              />
+            </div>
             <p className="text-slate-500 mt-2">Sistema de gestion medica</p>
           </div>
           {errorMsg && (

@@ -75,9 +75,10 @@ export default function NuevoCasoPage() {
 
   useEffect(() => {
     const fetchTipologias = async () => {
-      const q = query(collection(db, 'catalog_tables'), where('type', '==', 'tipologia'), where('active', '==', true));
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => ({ id: d.id, name: d.data().name }));
+      const snap = await getDocs(collection(db, 'catalog_tables'));
+      const list = snap.docs
+        .filter((d) => d.data().type === 'tipologia' && d.data().active === true)
+        .map((d) => ({ id: d.id, name: d.data().name }));
       setTipologias(list);
     };
     fetchTipologias();

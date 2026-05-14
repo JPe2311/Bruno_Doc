@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
@@ -41,8 +42,15 @@ export function Sidebar({ role }: { role: string }) {
   return (
     <aside className="w-64 min-h-screen border-r bg-white p-4 flex flex-col">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-sky-600">Bruno Doctor</h1>
-        <p className="text-xs text-slate-500">{ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}</p>
+        <div className="relative w-40 h-12">
+          <Image
+            src="/logo_bruno.png"
+            alt="Bruno Doctor"
+            fill
+            className="object-contain"
+          />
+        </div>
+        <p className="text-xs text-slate-500 mt-2">{ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}</p>
       </div>
       <nav className="space-y-1 flex-1">
         {links.map((l) => (

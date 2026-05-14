@@ -2,13 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isLoggedIn() { return request.auth != null; }
-    function getRole() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.exists ? userDoc.data.role : 'PACIENTE';
-    }
-    function isAdmin() { return getRole() == 'MEDICO'; }
-    function isSecretary() { return getRole() == 'SECRETARIA'; }
-    function isPatient() { return getRole() == 'PACIENTE'; }
 
     match /users/{uid} {
       allow read: if isLoggedIn();
@@ -16,25 +9,25 @@ service cloud.firestore {
     }
 
     match /medical_records/{id} {
-      allow read, write: if isAdmin();
+      allow read, write: if isLoggedIn();
     }
 
     match /appointments/{id} {
-      allow read: if isAdmin() || isSecretary() || request.auth.uid == resource.data.patientUid;
-      allow create: if isAdmin() || isSecretary() || (isPatient() && request.auth.uid == request.resource.data.patientUid);
-      allow update: if isAdmin() || isSecretary() || request.auth.uid == resource.data.patientUid;
-      allow delete: if isAdmin();
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn();
+      allow update: if isLoggedIn();
+      allow delete: if isLoggedIn();
     }
 
     match /slots/{slotId} {
       allow read: if isLoggedIn();
       allow create: if isLoggedIn();
-      allow delete: if isAdmin() || isSecretary() || request.auth.uid == resource.data.patientUid;
+      allow delete: if isLoggedIn();
     }
 
     match /schedules/{doctorUid} {
       allow read: if isLoggedIn();
-      allow write: if isAdmin() || request.auth.uid == doctorUid;
+      allow write: if isLoggedIn();
     }
 
     match /casos/{caseId} {
@@ -46,7 +39,7 @@ service cloud.firestore {
 
     match /catalog_tables/{id} {
       allow read: if isLoggedIn();
-      allow write: if isAdmin();
+      allow write: if isLoggedIn();
     }
   }
 }

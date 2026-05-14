@@ -251,7 +251,7 @@ export default function AppointmentsPage() {
                         </button>
                       </div>
                     )}
-                    {isDoctor && isConfirmed && doctorClinic.address && (
+                    {isDoctor && isConfirmed && (
                       <button
                         onClick={async () => {
                           let patientPhone = '';
@@ -269,6 +269,9 @@ export default function AppointmentsPage() {
                           let message = `Hola ${a.patientName}, tu cita con ${a.doctorName} ha sido CONFIRMADA para el ${dateStr}.`;
                           if (doctorClinic.address) message += ` Direccion: ${doctorClinic.address}.`;
                           if (doctorClinic.maps) message += ` Ver en mapa: ${doctorClinic.maps}`;
+                          if (!doctorClinic.address) {
+                            message += ` Por favor contacte al medico para conocer la direccion.`;
+                          }
                           window.open(`https://wa.me/${patientPhone}?text=${encodeURIComponent(message)}`, '_blank');
                         }}
                         className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-green-500 text-white hover:bg-green-600"
