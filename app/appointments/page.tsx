@@ -25,7 +25,7 @@ export default function AppointmentsPage() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('all');
   const [caseMap, setCaseMap] = useState<Set<string>>(new Set());
   const [doctorClinic, setDoctorClinic] = useState<{ address: string; maps: string; phone: string }>({ address: '', maps: '', phone: '' });
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -134,8 +134,10 @@ export default function AppointmentsPage() {
 
   const filteredAppointments = appointments.filter(a => {
     const date = parseISO(a.date);
-    if (filter === 'upcoming') return isFuture(date) || isToday(date);
+    const isPending = a.status === 'pending';
+    if (filter === 'upcoming') return isFuture(date) || isToday(date) || isPending;
     if (filter === 'past') return isPast(date) && !isToday(date);
+    if (filter === 'pending') return isPending;
     return true;
   });
 
@@ -153,6 +155,14 @@ export default function AppointmentsPage() {
         </div>
 
         <div className="flex gap-2 mb-6">
+          {role !== 'PACIENTE' && (
+            <button
+              onClick={() => setFilter('pending')}
+              className={`px-4 py-2 rounded-lg text-sm ${filter === 'pending' ? 'bg-orange-100 text-orange-700 font-medium' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              Pendientes
+            </button>
+          )}
           {(['all', 'upcoming', 'past'] as const).map((f) => (
             <button
               key={f}
