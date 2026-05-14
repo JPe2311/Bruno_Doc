@@ -18,6 +18,12 @@ const APPOINTMENT_TYPES = [
   { value: 'examen', label: 'Examen de laboratorio' },
 ];
 
+const DEFAULT_TIME_SLOTS = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '11:30', '12:00', '12:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
+];
+
 const DAY_LABELS: Record<number, string> = {
   0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mie', 4: 'Jue', 5: 'Vie', 6: 'Sab',
 };
@@ -75,13 +81,19 @@ function BookAppointmentContent() {
     const fetchDoctorInfo = async () => {
       const q = query(collection(db, 'schedules'));
       const snap = await getDocs(q);
+      if (snap.empty) {
+        setAvailableSlots(DEFAULT_TIME_SLOTS);
+        return;
+      }
       for (const scheduleDoc of snap.docs) {
         const data = scheduleDoc.data();
         setDoctorUid(scheduleDoc.id);
         setDoctorName(data.doctorName || 'Dr. Bruno');
         if (data.enabledDays) setEnabledDays(data.enabledDays);
-        if (data.timeSlots) {
+        if (data.timeSlots && data.timeSlots.length > 0) {
           setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
+        } else {
+          setAvailableSlots(DEFAULT_TIME_SLOTS);
         }
         break;
       }
