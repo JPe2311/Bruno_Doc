@@ -54,8 +54,9 @@ function BookAppointmentContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [doctorUid, setDoctorUid] = useState('');
-  const [doctorName, setDoctorName] = useState('Dr. Bruno');
+  const [doctors, setDoctors] = useState<Array<{ uid: string; fullName: string; clinicAddress: string; clinicMaps: string }>>([]);
+  const [selectedDoctorUid, setSelectedDoctorUid] = useState('');
+  const [doctorName, setDoctorName] = useState('');
   const [enabledDays, setEnabledDays] = useState<Record<DayOfWeek, boolean>>({
     0: false, 1: true, 2: true, 3: true, 4: true, 5: true, 6: false,
   });
@@ -67,6 +68,7 @@ function BookAppointmentContent() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [busySlots, setBusySlots] = useState<string[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
 
   const availableDays = getAvailableDays(enabledDays);
 
@@ -78,31 +80,62 @@ function BookAppointmentContent() {
 
   useEffect(() => {
     if (!user) return;
-    const fetchDoctorInfo = async () => {
-      const q = query(collection(db, 'schedules'));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        setAvailableSlots(DEFAULT_TIME_SLOTS);
-        return;
-      }
-      for (const scheduleDoc of snap.docs) {
-        const data = scheduleDoc.data();
-        setDoctorUid(scheduleDoc.id);
-        setDoctorName(data.doctorName || 'Dr. Bruno');
-        if (data.enabledDays) setEnabledDays(data.enabledDays);
-        if (data.timeSlots && data.timeSlots.length > 0) {
-          setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
-        } else {
-          setAvailableSlots(DEFAULT_TIME_SLOTS);
+    const fetchDoctors = async () => {
+      setLoadingDoctors(true);
+      try {
+        const q = query(collection(db, 'users'), where('role', '==', 'MEDICO'));
+        const snap = await getDocs(q);
+        const doctorsList = snap.docs.map((d) => ({
+          uid: d.id,
+          fullName: d.data().fullName || 'Dr. sin nombre',
+          clinicAddress: d.data().clinicAddress || '',
+          clinicMaps: d.data().clinicMaps || '',
+        }));
+        setDoctors(doctorsList);
+        if (doctorsList.length > 0) {
+          setSelectedDoctorUid(doctorsList[0].uid);
+          setDoctorName(doctorsList[0].fullName);
         }
-        break;
+      } catch (err) {
+        console.error('Error fetching doctors:', err);
+      } finally {
+        setLoadingDoctors(false);
       }
     };
-    fetchDoctorInfo();
+    fetchDoctors();
   }, [user]);
 
   useEffect(() => {
-    if (!doctorUid) return;
+    if (!selectedDoctorUid) return;
+    const fetchDoctorSchedule = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'schedules', selectedDoctorUid));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.enabledDays) setEnabledDays(data.enabledDays);
+          if (data.timeSlots && data.timeSlots.length > 0) {
+            setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
+          } else {
+            setAvailableSlots(DEFAULT_TIME_SLOTS);
+          }
+        } else {
+          setEnabledDays({ 0: false, 1: true, 2: true, 3: true, 4: true, 5: true, 6: false });
+          setAvailableSlots(DEFAULT_TIME_SLOTS);
+        }
+        const doctorInfo = doctors.find((d) => d.uid === selectedDoctorUid);
+        if (doctorInfo) {
+          setDoctorName(doctorInfo.fullName);
+        }
+      } catch (err) {
+        console.error('Error fetching schedule:', err);
+        setAvailableSlots(DEFAULT_TIME_SLOTS);
+      }
+    };
+    fetchDoctorSchedule();
+  }, [selectedDoctorUid, doctors]);
+
+  useEffect(() => {
+    if (!selectedDoctorUid) return;
     if (!availableSlots.length) return;
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -112,7 +145,7 @@ function BookAppointmentContent() {
         setStep(2);
       }
     }
-  }, [searchParams, doctorUid, availableSlots]);
+  }, [searchParams, selectedDoctorUid, availableSlots]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -135,7 +168,7 @@ function BookAppointmentContent() {
       toast.error('Por favor complete todos los datos');
       return;
     }
-    if (!doctorUid) {
+    if (!selectedDoctorUid) {
       toast.error('No se ha configurado el medico. Contacte al administrador.');
       return;
     }
@@ -152,7 +185,7 @@ function BookAppointmentContent() {
       batch.set(appointmentRef, {
         patientUid: user.uid,
         patientName: (user as { fullName?: string }).fullName || 'Paciente',
-        doctorUid,
+        doctorUid: selectedDoctorUid,
         doctorName,
         date: dateTime,
         durationMinutes: 30,
@@ -193,53 +226,88 @@ function BookAppointmentContent() {
     <div className="flex">
       <Sidebar role={role} />
       <main className="flex-1 p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">Reservar Cita con {doctorName}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-6">Reservar Cita</h1>
 
-        <div className="card mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
-            <span className="text-sm font-medium">Seleccionar Fecha</span>
+        {loadingDoctors ? (
+          <p className="text-slate-500">Cargando medicos...</p>
+        ) : doctors.length === 0 ? (
+          <div className="card text-center py-12">
+            <p className="text-slate-500">No hay medicos disponibles actualmente.</p>
           </div>
-          {step >= 1 && (
-            <div>
-              <p className="text-sm text-slate-500 mb-3">Selecciona un dia disponible:</p>
-              <div className="grid grid-cols-5 gap-2">
-                {availableDays.map((date) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const isPast = date < today;
-                  const isSelected = selectedDate?.toDateString() === date.toDateString();
-                  const isToday = date.toDateString() === today.toDateString();
-                  return (
-                    <button
-                      key={date.toISOString()}
-                      disabled={isPast}
-                      onClick={() => { setSelectedDate(date); setStep(2); }}
-                      className={`p-2 rounded text-center text-sm transition-colors ${
-                        isPast ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                        : isSelected ? 'bg-sky-600 text-white'
-                        : isToday ? 'bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100'
-                        : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
-                      }`}
-                    >
-                      <p className="text-xs">{DAY_LABELS[date.getDay()]}</p>
-                      <p className="text-lg font-bold">{date.getDate()}</p>
-                      <p className="text-xs">{format(date, 'MMM')}</p>
-                    </button>
-                  );
-                })}
+        ) : (
+          <>
+            <div className="card mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
+                <span className="text-sm font-medium">Seleccionar Medico</span>
               </div>
+              {step >= 1 && (
+                <div>
+                  <p className="text-sm text-slate-500 mb-3">Elige el medico con quien deseas la cita:</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {doctors.map((doc) => (
+                      <button
+                        key={doc.uid}
+                        onClick={() => { setSelectedDoctorUid(doc.uid); setDoctorName(doc.fullName); setStep(2); }}
+                        className={`p-3 rounded text-left transition-colors ${
+                          selectedDoctorUid === doc.uid ? 'bg-sky-600 text-white' : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
+                        }`}
+                      >
+                        <p className="font-medium">{doc.fullName}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {selectedDate && (
+            {selectedDoctorUid && (
+              <div className="card mb-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 2 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+                  <span className="text-sm font-medium">Seleccionar Fecha</span>
+                </div>
+                {step >= 2 && (
+                  <div>
+                    <p className="text-sm text-slate-500 mb-3">Selecciona un dia disponible:</p>
+                    <div className="grid grid-cols-5 gap-2">
+                      {availableDays.map((date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const isPast = date < today;
+                        const isSelected = selectedDate?.toDateString() === date.toDateString();
+                        const isToday = date.toDateString() === today.toDateString();
+                        return (
+                          <button
+                            key={date.toISOString()}
+                            disabled={isPast}
+                            onClick={() => { setSelectedDate(date); setStep(3); }}
+                            className={`p-2 rounded text-center text-sm transition-colors ${
+                              isPast ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                              : isSelected ? 'bg-sky-600 text-white'
+                              : isToday ? 'bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100'
+                              : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            <p className="text-xs">{DAY_LABELS[date.getDay()]}</p>
+                            <p className="text-lg font-bold">{date.getDate()}</p>
+                            <p className="text-xs">{format(date, 'MMM')}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedDate && (
           <div className="card mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 2 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 3 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3</span>
               <span className="text-sm font-medium">Seleccionar Horario</span>
             </div>
-            {step >= 2 && (
+            {step >= 3 && (
               <div>
                 <p className="text-sm text-slate-500 mb-3">
                   Horarios disponibles para {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
@@ -252,7 +320,7 @@ function BookAppointmentContent() {
                       <button
                         key={time}
                         disabled={isBusy}
-                        onClick={() => { setSelectedTime(time); setStep(3); }}
+                        onClick={() => { setSelectedTime(time); setStep(4); }}
                         className={`w-full py-2 px-4 rounded text-sm text-left transition-colors ${
                           isBusy ? 'bg-slate-100 text-slate-300 line-through cursor-not-allowed'
                           : isSelected ? 'bg-sky-600 text-white'
@@ -272,10 +340,10 @@ function BookAppointmentContent() {
         {selectedTime && (
           <div className="card mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 3 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3</span>
+              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 4 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>4</span>
               <span className="text-sm font-medium">Tipo de Consulta</span>
             </div>
-            {step >= 3 && (
+            {step >= 4 && (
               <div className="space-y-4">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Tipo de cita</span>
@@ -323,6 +391,8 @@ function BookAppointmentContent() {
               {loading ? 'Reservando...' : 'Confirmar Reserva'}
             </button>
           </div>
+        )}
+          </>
         )}
       </main>
     </div>
