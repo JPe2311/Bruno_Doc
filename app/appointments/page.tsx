@@ -215,9 +215,25 @@ export default function AppointmentsPage() {
                     )}
                     {isDoctor && isConfirmed && (
                       <button
-                        onClick={() => {
-                          // Lógica simplificada de WhatsApp ya implementada en el código original
-                          toast.success('Abriendo WhatsApp...');
+                        onClick={async () => {
+                          try {
+                            const patientSnap = await getDoc(doc(db, 'users', a.patientUid));
+                            if (patientSnap.exists()) {
+                              const phone = (patientSnap.data().phone || '').replace(/\D/g, '');
+                              if (!phone) {
+                                toast.error('El paciente no tiene teléfono');
+                                return;
+                              }
+                              const dateStr = format(date, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+                              let msg = `Hola ${a.patientName}, tu cita con ${a.doctorName} ha sido CONFIRMADA para el ${dateStr}.`;
+                              if (doctorClinic.address) msg += ` Dirección: ${doctorClinic.address}.`;
+                              if (doctorClinic.maps) msg += ` Maps: ${doctorClinic.maps}`;
+                              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            toast.error('Error al enviar mensaje');
+                          }
                         }}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#25D366] text-white font-bold text-xs hover:shadow-lg transition-all"
                       >
