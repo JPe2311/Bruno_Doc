@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 export default function OnboardingPage() {
   const { user, loading } = useAuth();
@@ -11,11 +12,8 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ fullName: '', phone: '', email: '', address: '', dni: '', obraSocial: '' });
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
-    if (user && user.fullName && user.phone) {
+useEffect(() => {
+    if (user && (user as { fullName?: string }).fullName && (user as { phone?: string }).phone) {
       router.replace('/dashboard');
     }
   }, [user, loading, router]);
@@ -40,9 +38,11 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', user.uid), { ...form }, { merge: true });
+      toast.success('Perfil guardado correctamente');
       router.push('/dashboard');
     } catch (err) {
       console.error(err);
+      toast.error('Error al guardar el perfil');
       setSaving(false);
     }
   };
