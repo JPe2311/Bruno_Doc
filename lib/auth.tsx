@@ -57,14 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if (docSnap.exists()) {
             const userData = { uid: firebaseUser.uid, ...docSnap.data() } as UserData;
-            const sessionOk = await createSessionCookie(firebaseUser, userData.role);
-            if (sessionOk) {
-              setUser(userData);
-            } else {
-              console.error('Failed to set session cookie');
-            }
+            await createSessionCookie(firebaseUser, userData.role);
+            setUser(userData);
           } else {
-            // New user, redirect to onboarding later, but need session too
+            // New user
             await createSessionCookie(firebaseUser, 'PACIENTE');
             setUser({
               uid: firebaseUser.uid,
