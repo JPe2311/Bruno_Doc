@@ -60,15 +60,9 @@ export default function LoginPage() {
 
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between w-full p-12 xl:p-16">
-          {/* Logo */}
-          <div className="flex items-center gap-4">
-            <div className="relative w-14 h-14">
-              <Image src="/logo_bruno.png" alt="Bruno Doctor" fill className="object-contain" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white tracking-wide">Bruno Doctor</h2>
-              <p className="text-slate-400 text-sm">Sistema Médico Integral</p>
-            </div>
+          {/* Logo - Large */}
+          <div className="relative w-32 h-32">
+            <Image src="/logo_bruno.png" alt="Bruno Doctor" fill className="object-contain" />
           </div>
 
           {/* Main Text */}
@@ -120,7 +114,7 @@ export default function LoginPage() {
 
           {/* Footer */}
           <div className="text-slate-500 text-sm">
-            © 2024 Bruno Doctor. Todos los derechos reservados.
+            © 2026 Bruno Doctor. Todos los derechos reservados.
           </div>
         </div>
       </div>
