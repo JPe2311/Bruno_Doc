@@ -1,26 +1,19 @@
 'use client';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
-import { Role } from '@/lib/types/domain';
+import { doc, getDoc } from 'firebase/firestore';
 
-export interface AuthUser {
+interface UserData {
   uid: string;
   email: string;
+  role: 'MEDICO' | 'SECRETARIA' | 'PACIENTE';
   fullName: string;
-  photoURL: string | null;
-  role: Role;
-  phone: string;
-  address: string;
-  dni: string;
-  obraSocial: string;
-  stampURL: string;
-  bannerURL: string;
+  onboardingCompleted?: boolean;
 }
 
 interface AuthContextType {
-  user: AuthUser | null;
+  user: UserData | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -31,101 +24,77 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
-async function createSessionCookie(firebaseUser: User, role: string): Promise<void> {
+async function createSessionCookie(firebaseUser: User, role: string): Promise<boolean> {
   try {
-    const idToken = await firebaseUser.getIdToken();
-    await fetch('/api/auth/session', {
+    const idToken = await firebaseUser.getIdToken(true);
+    const res = await fetch('/api/auth/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken, role }),
     });
-  } catch {
-    // Non-blocking
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('Session API error:', res.status, errorText);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Session Error:', err);
+    return false;
   }
 }
 
-async function fetchUserDoc(firebaseUser: User): Promise<AuthUser> {
-  const ref = doc(db, 'users', firebaseUser.uid);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) {
-    const data: AuthUser = {
-      uid: firebaseUser.uid,
-      email: firebaseUser.email || '',
-      fullName: firebaseUser.displayName || '',
-      photoURL: firebaseUser.photoURL || null,
-      role: 'PACIENTE',
-      phone: '',
-      address: '',
-      dni: '',
-      obraSocial: '',
-      stampURL: '',
-      bannerURL: '',
-    };
-    await setDoc(ref, { ...data, createdAt: new Date().toISOString() });
-    return data;
-  }
-
-  const existing = snap.data() as AuthUser;
-  if (!existing.role) {
-    await setDoc(ref, { role: 'PACIENTE' }, { merge: true });
-    return { ...existing, role: 'PACIENTE', uid: firebaseUser.uid };
-  }
-  return { ...existing, uid: firebaseUser.uid };
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    const fallbackTimer = setTimeout(() => {
-      if (!cancelled) setLoading(false);
-    }, 10000);
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      clearTimeout(fallbackTimer);
-      if (cancelled) return;
-
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setLoading(true);
-        // Create session cookie and fetch user doc in parallel
-        Promise.all([fetchUserDoc(firebaseUser)])
-          .then(([userData]) => {
-            createSessionCookie(firebaseUser, userData.role); // fire-and-forget
-            if (!cancelled) {
+        try {
+          const docRef = doc(db, 'users', firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            const userData = { uid: firebaseUser.uid, ...docSnap.data() } as UserData;
+            const sessionOk = await createSessionCookie(firebaseUser, userData.role);
+            if (sessionOk) {
               setUser(userData);
-              setLoading(false);
+            } else {
+              console.error('Failed to set session cookie');
             }
-          })
-          .catch(() => {
-            if (!cancelled) {
-              setUser(null);
-              setLoading(false);
-            }
-          });
+          } else {
+            // New user, redirect to onboarding later, but need session too
+            await createSessionCookie(firebaseUser, 'PACIENTE');
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              role: 'PACIENTE',
+              fullName: '',
+              onboardingCompleted: false,
+            });
+          }
+        } catch (err) {
+          console.error('Auth Init Error:', err);
+          setUser(null);
+        }
       } else {
         setUser(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
 
-    return () => {
-      cancelled = true;
-      clearTimeout(fallbackTimer);
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signOut = async () => {
     try {
+      await firebaseSignOut(auth);
       await fetch('/api/auth/session', { method: 'DELETE' });
-    } catch {
-      // Ignore logout errors
+      setUser(null);
+    } catch (err) {
+      console.error('Logout error:', err);
     }
-    await firebaseSignOut(auth);
-    setUser(null);
   };
 
   return (
@@ -135,6 +104,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);
