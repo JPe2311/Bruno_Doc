@@ -9,62 +9,46 @@ import { printReportHTML } from '@/lib/printReport';
 import { Caso } from '@/lib/types/domain';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { logAudit } from '@/lib/audit';
+
+function escapeHtml(str: string): string {
+  return (str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 function buildReportHTML(caso: Caso, stampURL: string, bannerURL: string, doctorName: string): string {
   const date = caso.date ? format(parseISO(caso.date), "EEEE d 'de' MMMM 'de' yyyy", { locale: es }) : '';
   const parts: string[] = [];
 
-  if (bannerURL) {
-    parts.push(`<img src="${bannerURL}" alt="Banner" class="banner-img" />`);
-  }
-
-  parts.push(`<div class="report-header">${date}</div>`);
-
-  if (caso.tipologia) {
-    parts.push(`<div><span class="tipologia-badge">${caso.tipologia}</span></div>`);
-  }
+  if (bannerURL) parts.push(`<img src="${escapeHtml(bannerURL)}" alt="Banner" class="banner-img" />`);
+  parts.push(`<div class="report-header">${escapeHtml(date)}</div>`);
+  if (caso.tipologia) parts.push(`<div><span class="tipologia-badge">${escapeHtml(caso.tipologia)}</span></div>`);
 
   parts.push(`<div class="report-section">
     <h3>Datos del Paciente</h3>
     <div class="patient-grid">
-      <p><span class="label">Nombre:</span> ${caso.patientData.fullName}</p>
-      <p><span class="label">DNI:</span> ${caso.patientData.dni}</p>
-      <p><span class="label">Obra Social:</span> ${caso.patientData.obraSocial || '-'}</p>
-      <p><span class="label">Telefono:</span> ${caso.patientData.phone}</p>
-      <p><span class="label">Direccion:</span> ${caso.patientData.address}</p>
-      <p><span class="label">Medico:</span> ${caso.doctorName || doctorName}</p>
+      <p><span class="label">Nombre:</span> ${escapeHtml(caso.patientData.fullName)}</p>
+      <p><span class="label">DNI:</span> ${escapeHtml(caso.patientData.dni)}</p>
+      <p><span class="label">Obra Social:</span> ${escapeHtml(caso.patientData.obraSocial || '-')}</p>
+      <p><span class="label">Teléfono:</span> ${escapeHtml(caso.patientData.phone)}</p>
+      <p><span class="label">Dirección:</span> ${escapeHtml(caso.patientData.address)}</p>
+      <p><span class="label">Médico:</span> ${escapeHtml(caso.doctorName || doctorName)}</p>
     </div>
   </div>`);
 
-  if (caso.description) {
-    parts.push(`<div class="report-section">
-      <h3>Registro de Atencion</h3>
-      <p>${caso.description}</p>
-    </div>`);
-  }
-  if (caso.diagnosis) {
-    parts.push(`<div class="report-section">
-      <h3>Diagnostico</h3>
-      <p>${caso.diagnosis}</p>
-    </div>`);
-  }
-  if (caso.treatment) {
-    parts.push(`<div class="report-section">
-      <h3>Tratamiento</h3>
-      <p>${caso.treatment}</p>
-    </div>`);
-  }
-  if (caso.notes) {
-    parts.push(`<div class="report-section">
-      <h3>Notas</h3>
-      <p>${caso.notes}</p>
-    </div>`);
-  }
+  if (caso.description) parts.push(`<div class="report-section"><h3>Registro de Atención</h3><p>${escapeHtml(caso.description)}</p></div>`);
+  if (caso.diagnosis) parts.push(`<div class="report-section"><h3>Diagnóstico</h3><p>${escapeHtml(caso.diagnosis)}</p></div>`);
+  if (caso.treatment) parts.push(`<div class="report-section"><h3>Tratamiento</h3><p>${escapeHtml(caso.treatment)}</p></div>`);
+  if (caso.notes) parts.push(`<div class="report-section"><h3>Notas</h3><p>${escapeHtml(caso.notes)}</p></div>`);
 
   if (stampURL) {
-    parts.push(`<div class="stamp-container"><img src="${stampURL}" alt="Sello" /></div>`);
+    parts.push(`<div class="stamp-container"><img src="${escapeHtml(stampURL)}" alt="Sello" /></div>`);
   } else {
-    parts.push(`<div class="stamp-container"><div class="no-stamp"><p class="name">${doctorName}</p><p class="role">Medico</p></div></div>`);
+    parts.push(`<div class="stamp-container"><div class="no-stamp"><p class="name">${escapeHtml(doctorName)}</p><p class="role">Médico</p></div></div>`);
   }
 
   return parts.join('');
@@ -84,9 +68,7 @@ export default function PatientDetailPage() {
   const isOwnProfile = user && patientUid === user.uid;
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-    }
+    if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
   useEffect(() => {
@@ -101,155 +83,144 @@ export default function PatientDetailPage() {
       try {
         const patientSnap = await getDoc(doc(db, 'users', patientUid));
         if (patientSnap.exists()) {
-          const data = patientSnap.data();
+          const d = patientSnap.data();
           setPatientData({
-            fullName: data.fullName || '',
-            dni: data.dni || '',
-            phone: data.phone || '',
-            obraSocial: data.obraSocial || '',
-            email: data.email || '',
-            address: data.address || '',
+            fullName: d.fullName || '', dni: d.dni || '', phone: d.phone || '',
+            obraSocial: d.obraSocial || '', email: d.email || '', address: d.address || '',
           });
         }
 
-        const casosSnap = await getDocs(
-          query(collection(db, 'casos'), where('patientUid', '==', patientUid))
-        );
-        const casosList = casosSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as Caso & { id: string }))
+        const casosSnap = await getDocs(query(collection(db, 'casos'), where('patientUid', '==', patientUid)));
+        const list = casosSnap.docs.map(d => ({ id: d.id, ...d.data() } as Caso & { id: string }))
           .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setCasos(casosList);
+        setCasos(list);
 
-        const doctorUids = [...new Set(casosList.map((c) => c.doctorUid))];
+        const doctorUids = [...new Set(list.map(c => c.doctorUid))];
         const assets: Record<string, { stampURL: string; bannerURL: string }> = {};
-        await Promise.all(
-          doctorUids.map(async (uid) => {
-            try {
-              const snap = await getDoc(doc(db, 'users', uid));
-              if (snap.exists()) {
-                const d = snap.data();
-                assets[uid] = { stampURL: d.stampURL || '', bannerURL: d.bannerURL || '' };
-              }
-            } catch {}
-          })
-        );
+        await Promise.all(doctorUids.map(async (uid) => {
+          try {
+            const snap = await getDoc(doc(db, 'users', uid));
+            if (snap.exists()) {
+              const d = snap.data();
+              assets[uid] = { stampURL: d.stampURL || '', bannerURL: d.bannerURL || '' };
+            }
+          } catch {}
+        }));
         setDoctorAssets(assets);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
+      } catch (e) { console.error(e); } finally { setLoading(false); }
     };
     loadData();
   }, [user, patientUid, router]);
 
   const handlePrint = (caso: Caso & { id: string }) => {
+    if (user) logAudit(user, 'PRINT_CASO', { id: caso.id, type: 'caso', patientUid: caso.patientUid });
     const assets = doctorAssets[caso.doctorUid] || { stampURL: '', bannerURL: '' };
     const html = buildReportHTML(caso, assets.stampURL, assets.bannerURL, caso.doctorName);
     printReportHTML(html);
   };
 
-  if (authLoading || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <p className="text-slate-500">Cargando...</p>
-      </div>
-    );
-  }
+  if (authLoading || !user) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="spinner" /></div>;
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar role={user.role} />
-      <main className="flex-1 p-6">
-        <div className="mb-6">
-          <button
-            onClick={() => router.back()}
-            className="text-sm text-sky-600 hover:underline mb-2 inline-block"
-          >
-            &larr; Volver
-          </button>
-          <h1 className="text-2xl font-bold text-slate-900">
-            {isOwnProfile ? 'Mis Reportes' : `Paciente: ${patientData?.fullName || 'Cargando...'}`}
-          </h1>
-        </div>
+      <main className="flex-1 p-8 max-w-5xl mx-auto space-y-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <button onClick={() => router.back()} className="flex items-center gap-1 text-xs font-bold text-blue-600 uppercase tracking-widest hover:text-blue-700 transition-colors mb-2">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth={2.5}/></svg>
+              Volver
+            </button>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+              {isOwnProfile ? 'Mis Reportes Médicos' : `Historia Clínica: ${patientData?.fullName}`}
+            </h1>
+          </div>
+        </header>
 
         {loading ? (
-          <p className="text-slate-500">Cargando...</p>
+          <div className="flex justify-center py-20"><div className="spinner" /></div>
         ) : !patientData ? (
-          <div className="card text-center py-12">
-            <p className="text-slate-500">Paciente no encontrado</p>
+          <div className="card text-center py-24 flex flex-col items-center">
+            <p className="text-slate-500 font-medium">Paciente no encontrado</p>
           </div>
         ) : (
-          <>
+          <div className="grid grid-cols-1 gap-8">
             {!isOwnProfile && (
-              <div className="card mb-6">
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos del Paciente</h2>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="font-medium text-slate-600">Nombre:</span> {patientData.fullName}</div>
-                  <div><span className="font-medium text-slate-600">DNI:</span> {patientData.dni}</div>
-                  <div><span className="font-medium text-slate-600">Telefono:</span> {patientData.phone}</div>
-                  <div><span className="font-medium text-slate-600">Obra Social:</span> {patientData.obraSocial || '-'}</div>
-                  <div><span className="font-medium text-slate-600">Email:</span> {patientData.email}</div>
-                  <div><span className="font-medium text-slate-600">Direccion:</span> {patientData.address}</div>
+              <section className="card bg-white border-none shadow-xl shadow-slate-200/50">
+                <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-6">Información del Paciente</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[
+                    { label: 'DNI / Identificación', value: patientData.dni },
+                    { label: 'Obra Social', value: patientData.obraSocial || 'Particular', isBadge: true },
+                    { label: 'Teléfono', value: patientData.phone },
+                    { label: 'Email', value: patientData.email },
+                    { label: 'Dirección', value: patientData.address },
+                  ].map((item, idx) => (
+                    <div key={idx}>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">{item.label}</p>
+                      {item.isBadge ? (
+                        <span className="badge badge-sky border border-sky-200">{item.value}</span>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-700">{item.value || '-'}</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            <div className="card">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Reportes / Casos ({casos.length})
-              </h2>
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cronología de Casos ({casos.length})</h2>
+              </div>
+              
               {casos.length === 0 ? (
-                <p className="text-slate-500">No hay reportes registrados para este paciente</p>
+                <div className="card text-center py-16">
+                  <p className="text-slate-500 italic">No se registran atenciones clínicas aún.</p>
+                </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {casos.map((c) => {
                     const fecha = c.createdAt || c.date;
                     return (
-                      <div key={c.id} className="border rounded-lg p-4">
-                        <div className="grid grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Fecha</p>
-                            <p className="text-slate-700">
-                              {fecha ? format(parseISO(fecha), "dd/MM/yyyy") : '-'}
-                            </p>
+                      <div key={c.id} className="card group hover:border-blue-200 transition-all duration-200">
+                        <div className="flex flex-col md:flex-row gap-6">
+                          <div className="flex-shrink-0 w-16 h-16 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{fecha ? format(parseISO(fecha), 'MMM', { locale: es }) : ''}</span>
+                            <span className="text-2xl font-black text-slate-700 group-hover:text-blue-700">{fecha ? format(parseISO(fecha), 'dd') : '-'}</span>
                           </div>
-                          <div className="col-span-2">
-                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Motivo</p>
-                            <p className="text-slate-700 line-clamp-2">
-                              {c.description || c.diagnosis || '-'}
-                            </p>
+                          
+                          <div className="flex-1 space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-2">
+                                {c.tipologia && <span className="badge badge-blue">{c.tipologia}</span>}
+                                <span className="text-[11px] font-bold text-slate-400">Atendido por {c.doctorName}</span>
+                              </div>
+                              <button onClick={() => handlePrint(c)} className="btn-primary !py-2 !px-4 text-xs shadow-md">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4" strokeWidth={2}/></svg>
+                                Imprimir Reporte
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
+                              <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Motivo / Diagnóstico</h4>
+                                <p className="text-sm text-slate-700 leading-relaxed font-medium line-clamp-3">{c.description || c.diagnosis || '-'}</p>
+                              </div>
+                              <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tratamiento Sugerido</h4>
+                                <p className="text-sm text-slate-700 leading-relaxed font-medium line-clamp-3">{c.treatment || '-'}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Tratamiento</p>
-                            <p className="text-slate-700 line-clamp-2">
-                              {c.treatment || '-'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                          <div className="flex items-center gap-2">
-                            {c.tipologia && (
-                              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                                {c.tipologia}
-                              </span>
-                            )}
-                            <span className="text-xs text-slate-400">{c.doctorName}</span>
-                          </div>
-                          <button
-                            onClick={() => handlePrint(c)}
-                            className="px-3 py-1.5 rounded text-xs font-medium bg-sky-600 text-white hover:bg-sky-700"
-                          >
-                            Ver Reporte
-                          </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </div>
-          </>
+            </section>
+          </div>
         )}
       </main>
     </div>

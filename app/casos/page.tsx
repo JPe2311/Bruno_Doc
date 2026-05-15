@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
@@ -9,6 +9,17 @@ import { printReportHTML } from '@/lib/printReport';
 import { Caso } from '@/lib/types/domain';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { logAudit } from '@/lib/audit';
+
+/** Prevents XSS in generated report HTML */
+function escapeHtml(str: string): string {
+  return (str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 interface TipologiaOption {
   id: string;
@@ -20,56 +31,44 @@ function buildReportHTML(caso: Caso, stampURL: string, bannerURL: string, doctor
   const parts: string[] = [];
 
   if (bannerURL) {
-    parts.push(`<img src="${bannerURL}" alt="Banner" class="banner-img" />`);
+    parts.push(`<img src="${escapeHtml(bannerURL)}" alt="Banner" class="banner-img" />`);
   }
 
-  parts.push(`<div class="report-header">${date}</div>`);
+  parts.push(`<div class="report-header">${escapeHtml(date)}</div>`);
 
   if (caso.tipologia) {
-    parts.push(`<div><span class="tipologia-badge">${caso.tipologia}</span></div>`);
+    parts.push(`<div><span class="tipologia-badge">${escapeHtml(caso.tipologia)}</span></div>`);
   }
 
   parts.push(`<div class="report-section">
     <h3>Datos del Paciente</h3>
     <div class="patient-grid">
-      <p><span class="label">Nombre:</span> ${caso.patientData.fullName}</p>
-      <p><span class="label">DNI:</span> ${caso.patientData.dni}</p>
-      <p><span class="label">Obra Social:</span> ${caso.patientData.obraSocial || '-'}</p>
-      <p><span class="label">Telefono:</span> ${caso.patientData.phone}</p>
-      <p><span class="label">Direccion:</span> ${caso.patientData.address}</p>
-      <p><span class="label">Medico:</span> ${caso.doctorName || doctorName}</p>
+      <p><span class="label">Nombre:</span> ${escapeHtml(caso.patientData.fullName)}</p>
+      <p><span class="label">DNI:</span> ${escapeHtml(caso.patientData.dni)}</p>
+      <p><span class="label">Obra Social:</span> ${escapeHtml(caso.patientData.obraSocial || '-')}</p>
+      <p><span class="label">Telefono:</span> ${escapeHtml(caso.patientData.phone)}</p>
+      <p><span class="label">Direccion:</span> ${escapeHtml(caso.patientData.address)}</p>
+      <p><span class="label">Medico:</span> ${escapeHtml(caso.doctorName || doctorName)}</p>
     </div>
   </div>`);
 
   if (caso.description) {
-    parts.push(`<div class="report-section">
-      <h3>Registro de Atencion</h3>
-      <p>${caso.description}</p>
-    </div>`);
+    parts.push(`<div class="report-section"><h3>Registro de Atencion</h3><p>${escapeHtml(caso.description)}</p></div>`);
   }
   if (caso.diagnosis) {
-    parts.push(`<div class="report-section">
-      <h3>Diagnostico</h3>
-      <p>${caso.diagnosis}</p>
-    </div>`);
+    parts.push(`<div class="report-section"><h3>Diagnostico</h3><p>${escapeHtml(caso.diagnosis)}</p></div>`);
   }
   if (caso.treatment) {
-    parts.push(`<div class="report-section">
-      <h3>Tratamiento</h3>
-      <p>${caso.treatment}</p>
-    </div>`);
+    parts.push(`<div class="report-section"><h3>Tratamiento</h3><p>${escapeHtml(caso.treatment)}</p></div>`);
   }
   if (caso.notes) {
-    parts.push(`<div class="report-section">
-      <h3>Notas</h3>
-      <p>${caso.notes}</p>
-    </div>`);
+    parts.push(`<div class="report-section"><h3>Notas</h3><p>${escapeHtml(caso.notes)}</p></div>`);
   }
 
   if (stampURL) {
-    parts.push(`<div class="stamp-container"><img src="${stampURL}" alt="Sello" /></div>`);
+    parts.push(`<div class="stamp-container"><img src="${escapeHtml(stampURL)}" alt="Sello" /></div>`);
   } else {
-    parts.push(`<div class="stamp-container"><div class="no-stamp"><p class="name">${doctorName}</p><p class="role">Medico</p></div></div>`);
+    parts.push(`<div class="stamp-container"><div class="no-stamp"><p class="name">${escapeHtml(doctorName)}</p><p class="role">Medico</p></div></div>`);
   }
 
   return parts.join('');
@@ -138,6 +137,9 @@ export default function CasosListPage() {
 
   const handleViewReport = async (caso: Caso & { id: string }) => {
     setSelectedCaso(caso);
+    if (user) {
+      logAudit(user, 'VIEW_CASO', { id: caso.id, type: 'caso', patientUid: caso.patientUid });
+    }
     if (!doctorAssets[caso.doctorUid]) {
       try {
         const snap = await getDoc(doc(db, 'users', caso.doctorUid));
@@ -157,6 +159,9 @@ export default function CasosListPage() {
   };
 
   const handlePrintCaso = (caso: Caso & { id: string }) => {
+    if (user) {
+      logAudit(user, 'PRINT_CASO', { id: caso.id, type: 'caso', patientUid: caso.patientUid });
+    }
     const assets = doctorAssets[caso.doctorUid] || { stampURL: '', bannerURL: '', doctorName: caso.doctorName };
     const html = buildReportHTML(caso, assets.stampURL, assets.bannerURL, caso.doctorName);
     printReportHTML(html);

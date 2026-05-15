@@ -1,17 +1,20 @@
 'use client';
 import { Suspense, useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, where, doc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { addDays, format } from 'date-fns';
+import { 
+  addDays, format, startOfMonth, endOfMonth, eachDayOfInterval, 
+  isSameMonth, isSameDay, addMonths, subMonths, isPast, isToday, startOfDay 
+} from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { DayOfWeek } from '@/lib/types/domain';
 
 const APPOINTMENT_TYPES = [
-  { value: 'consulta', label: 'Consulta medica' },
+  { value: 'consulta', label: 'Consulta médica' },
   { value: 'control', label: 'Control' },
   { value: 'urgencia', label: 'Urgencia' },
   { value: 'vacunas', label: 'Vacunas' },
@@ -24,27 +27,9 @@ const DEFAULT_TIME_SLOTS = [
   '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
 ];
 
-const DAY_LABELS: Record<number, string> = {
-  0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mie', 4: 'Jue', 5: 'Vie', 6: 'Sab',
-};
-
-function getAvailableDays(enabledDays: Record<DayOfWeek, boolean>) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dates: Date[] = [];
-  for (let i = 0; i < 30; i++) {
-    const d = addDays(today, i);
-    const dow = d.getDay() as DayOfWeek;
-    if (enabledDays[dow]) {
-      dates.push(d);
-    }
-  }
-  return dates;
-}
-
 export default function BookAppointmentPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-slate-50"><p className="text-slate-500">Cargando...</p></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="spinner" /></div>}>
       <BookAppointmentContent />
     </Suspense>
   );
@@ -54,15 +39,16 @@ function BookAppointmentContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [doctors, setDoctors] = useState<Array<{ uid: string; fullName: string; clinicAddress: string; clinicMaps: string }>>([]);
+  
+  const [doctors, setDoctors] = useState<Array<{ uid: string; fullName: string }>>([]);
   const [selectedDoctorUid, setSelectedDoctorUid] = useState('');
   const [doctorName, setDoctorName] = useState('');
   const [enabledDays, setEnabledDays] = useState<Record<DayOfWeek, boolean>>({
     0: false, 1: true, 2: true, 3: true, 4: true, 5: true, 6: false,
   });
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [step, setStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [appointmentType, setAppointmentType] = useState('');
   const [notes, setNotes] = useState('');
@@ -70,12 +56,9 @@ function BookAppointmentContent() {
   const [busySlots, setBusySlots] = useState<string[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
 
-  const availableDays = getAvailableDays(enabledDays);
-
+  // Initial fetch
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-    }
+    if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
   useEffect(() => {
@@ -85,315 +68,239 @@ function BookAppointmentContent() {
       try {
         const q = query(collection(db, 'users'), where('role', '==', 'MEDICO'));
         const snap = await getDocs(q);
-        const doctorsList = snap.docs.map((d) => ({
-          uid: d.id,
-          fullName: d.data().fullName || 'Dr. sin nombre',
-          clinicAddress: d.data().clinicAddress || '',
-          clinicMaps: d.data().clinicMaps || '',
-        }));
-        setDoctors(doctorsList);
-        if (doctorsList.length > 0) {
-          setSelectedDoctorUid(doctorsList[0].uid);
-          setDoctorName(doctorsList[0].fullName);
+        const list = snap.docs.map(d => ({ uid: d.id, fullName: d.data().fullName || 'Dr. sin nombre' }));
+        setDoctors(list);
+        if (list.length > 0) {
+          setSelectedDoctorUid(list[0].uid);
+          setDoctorName(list[0].fullName);
         }
-      } catch (err) {
-        console.error('Error fetching doctors:', err);
-      } finally {
-        setLoadingDoctors(false);
-      }
+      } catch (err) { console.error(err); } finally { setLoadingDoctors(false); }
     };
     fetchDoctors();
   }, [user]);
 
   useEffect(() => {
     if (!selectedDoctorUid) return;
-    const fetchDoctorSchedule = async () => {
+    const fetchSchedule = async () => {
       try {
         const docSnap = await getDoc(doc(db, 'schedules', selectedDoctorUid));
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data.enabledDays) setEnabledDays(data.enabledDays);
-          if (data.timeSlots && data.timeSlots.length > 0) {
-            setAvailableSlots(data.timeSlots.map((s: { start: string }) => s.start));
-          } else {
-            setAvailableSlots(DEFAULT_TIME_SLOTS);
-          }
+          setAvailableSlots(data.timeSlots?.length > 0 ? data.timeSlots.map((s: any) => s.start) : DEFAULT_TIME_SLOTS);
         } else {
-          setEnabledDays({ 0: false, 1: true, 2: true, 3: true, 4: true, 5: true, 6: false });
           setAvailableSlots(DEFAULT_TIME_SLOTS);
         }
-        const doctorInfo = doctors.find((d) => d.uid === selectedDoctorUid);
-        if (doctorInfo) {
-          setDoctorName(doctorInfo.fullName);
-        }
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-        setAvailableSlots(DEFAULT_TIME_SLOTS);
-      }
+      } catch (err) { console.error(err); setAvailableSlots(DEFAULT_TIME_SLOTS); }
     };
-    fetchDoctorSchedule();
-  }, [selectedDoctorUid, doctors]);
-
-  useEffect(() => {
-    if (!selectedDoctorUid) return;
-    if (!availableSlots.length) return;
-    const dateParam = searchParams.get('date');
-    if (dateParam) {
-      const parsed = new Date(dateParam + 'T12:00:00');
-      if (!isNaN(parsed.getTime())) {
-        setSelectedDate(parsed);
-        setStep(2);
-      }
-    }
-  }, [searchParams, selectedDoctorUid, availableSlots]);
+    fetchSchedule();
+  }, [selectedDoctorUid]);
 
   useEffect(() => {
     if (selectedDate) {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const fetchBusySlots = async () => {
+      const fetchBusy = async () => {
         const q = query(collection(db, 'slots'), where('date', '==', dateStr));
         const snap = await getDocs(q);
-        const times = snap.docs.map(d => {
-          const data = d.data();
-          return (data.time as string) || '';
-        }).filter(Boolean);
-        setBusySlots(times);
+        setBusySlots(snap.docs.map(d => d.data().time as string));
       };
-      fetchBusySlots();
+      fetchBusy();
     }
   }, [selectedDate]);
 
   const handleBook = async () => {
     if (!user || !selectedDate || !selectedTime || !appointmentType) {
-      toast.error('Por favor complete todos los datos');
-      return;
-    }
-    if (!selectedDoctorUid) {
-      toast.error('No se ha configurado el medico. Contacte al administrador.');
-      return;
-    }
-    if (busySlots.includes(selectedTime)) {
-      toast.error('Este horario ya no esta disponible');
-      return;
+      toast.error('Complete todos los campos'); return;
     }
     setLoading(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const dateTime = `${dateStr}T${selectedTime}:00`;
       const batch = writeBatch(db);
-      const appointmentRef = doc(collection(db, 'appointments'));
-      batch.set(appointmentRef, {
+      const appRef = doc(collection(db, 'appointments'));
+      batch.set(appRef, {
         patientUid: user.uid,
-        patientName: (user as { fullName?: string }).fullName || 'Paciente',
+        patientName: user.fullName || 'Paciente',
         doctorUid: selectedDoctorUid,
         doctorName,
-        date: dateTime,
-        durationMinutes: 30,
+        date: `${dateStr}T${selectedTime}:00`,
         status: 'pending',
         type: APPOINTMENT_TYPES.find(t => t.value === appointmentType)?.label || appointmentType,
         notes: notes || '',
         createdAt: new Date().toISOString(),
       });
-      const slotRef = doc(collection(db, 'slots'));
-      batch.set(slotRef, {
-        date: dateStr,
-        time: selectedTime,
-        patientUid: user.uid,
-        appointmentId: appointmentRef.id,
-      });
+      batch.set(doc(collection(db, 'slots')), { date: dateStr, time: selectedTime, patientUid: user.uid, appointmentId: appRef.id });
       await batch.commit();
-      toast.success('Cita solicitada! Pendiente de confirmacion por el medico.');
+      toast.success('¡Cita solicitada correctamente!');
       router.push('/appointments');
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al reservar la cita');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { toast.error('Error al reservar'); } finally { setLoading(false); }
   };
 
-  if (authLoading || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <p className="text-slate-500">Cargando...</p>
-      </div>
-    );
-  }
+  // Calendar Logic
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = monthStart;
+  const endDate = monthEnd;
+  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const role = (user as { role?: string })?.role ?? 'PACIENTE';
+  const weekDays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const firstDayOfMonth = monthStart.getDay();
+  const paddingDays = Array.from({ length: firstDayOfMonth }).map((_, i) => i);
+
+  if (authLoading || !user) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="spinner" /></div>;
 
   return (
-    <div className="flex">
-      <Sidebar role={role} />
-      <main className="flex-1 p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">Reservar Cita</h1>
+    <div className="flex min-h-screen bg-slate-50">
+      <Sidebar role={user.role} />
+      <main className="flex-1 p-8 max-w-4xl mx-auto space-y-8">
+        <header>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Nueva Cita</h1>
+          <p className="text-slate-500 mt-1">Siga los pasos para agendar su consulta</p>
+        </header>
 
-        {loadingDoctors ? (
-          <p className="text-slate-500">Cargando medicos...</p>
-        ) : doctors.length === 0 ? (
-          <div className="card text-center py-12">
-            <p className="text-slate-500">No hay medicos disponibles actualmente.</p>
-          </div>
-        ) : (
-          <>
-            <div className="card mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
-                <span className="text-sm font-medium">Seleccionar Medico</span>
-              </div>
-              {step >= 1 && (
-                <div>
-                  <p className="text-sm text-slate-500 mb-3">Elige el medico con quien deseas la cita:</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {doctors.map((doc) => (
-                      <button
-                        key={doc.uid}
-                        onClick={() => { setSelectedDoctorUid(doc.uid); setDoctorName(doc.fullName); setStep(2); }}
-                        className={`p-3 rounded text-left transition-colors ${
-                          selectedDoctorUid === doc.uid ? 'bg-sky-600 text-white' : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
-                        }`}
-                      >
-                        <p className="font-medium">{doc.fullName}</p>
-                      </button>
-                    ))}
-                  </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Form Side */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Step 1: Doctor */}
+            <section className="card">
+              <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4">1. Médico</h2>
+              {loadingDoctors ? <div className="spinner" /> : (
+                <div className="grid grid-cols-1 gap-2">
+                  {doctors.map(d => (
+                    <button key={d.uid} onClick={() => { setSelectedDoctorUid(d.uid); setDoctorName(d.fullName); }}
+                      className={`p-4 rounded-xl text-left border-2 transition-all ${selectedDoctorUid === d.uid ? 'border-blue-500 bg-blue-50' : 'border-slate-100 bg-slate-50 hover:border-blue-200'}`}>
+                      <p className={`font-bold ${selectedDoctorUid === d.uid ? 'text-blue-700' : 'text-slate-700'}`}>{d.fullName}</p>
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
+            </section>
 
-            {selectedDoctorUid && (
-              <div className="card mb-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 2 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
-                  <span className="text-sm font-medium">Seleccionar Fecha</span>
-                </div>
-                {step >= 2 && (
-                  <div>
-                    <p className="text-sm text-slate-500 mb-3">Selecciona un dia disponible:</p>
-                    <div className="grid grid-cols-5 gap-2">
-                      {availableDays.map((date) => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const isPast = date < today;
-                        const isSelected = selectedDate?.toDateString() === date.toDateString();
-                        const isToday = date.toDateString() === today.toDateString();
-                        return (
-                          <button
-                            key={date.toISOString()}
-                            disabled={isPast}
-                            onClick={() => { setSelectedDate(date); setStep(3); }}
-                            className={`p-2 rounded text-center text-sm transition-colors ${
-                              isPast ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                              : isSelected ? 'bg-sky-600 text-white'
-                              : isToday ? 'bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100'
-                              : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            <p className="text-xs">{DAY_LABELS[date.getDay()]}</p>
-                            <p className="text-lg font-bold">{date.getDate()}</p>
-                            <p className="text-xs">{format(date, 'MMM')}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
+            {/* Step 2: Calendar */}
+            <section className="card">
+              <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4">2. Fecha</h2>
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold text-slate-800 capitalize">{format(currentMonth, 'MMMM yyyy', { locale: es })}</h3>
+                  <div className="flex gap-1">
+                    <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth={2}/></svg>
+                    </button>
+                    <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth={2}/></svg>
+                    </button>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
 
-            {selectedDate && (
-          <div className="card mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 3 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>3</span>
-              <span className="text-sm font-medium">Seleccionar Horario</span>
-            </div>
-            {step >= 3 && (
-              <div>
-                <p className="text-sm text-slate-500 mb-3">
-                  Horarios disponibles para {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
-                </p>
-                <div className="space-y-2">
-                  {availableSlots.map((time) => {
-                    const isBusy = busySlots.includes(time);
-                    const isSelected = selectedTime === time;
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {weekDays.map(d => <span key={d} className="text-[10px] font-black text-slate-400 text-center uppercase tracking-tighter">{d}</span>)}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {paddingDays.map(p => <div key={`pad-${p}`} />)}
+                  {calendarDays.map(date => {
+                    const dow = date.getDay() as DayOfWeek;
+                    const isEnabled = enabledDays[dow];
+                    const past = isPast(date) && !isToday(date);
+                    const isSelected = selectedDate && isSameDay(date, selectedDate);
+                    const disabled = !isEnabled || past;
+
                     return (
-                      <button
-                        key={time}
-                        disabled={isBusy}
-                        onClick={() => { setSelectedTime(time); setStep(4); }}
-                        className={`w-full py-2 px-4 rounded text-sm text-left transition-colors ${
-                          isBusy ? 'bg-slate-100 text-slate-300 line-through cursor-not-allowed'
-                          : isSelected ? 'bg-sky-600 text-white'
-                          : 'bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200'
-                        }`}
-                      >
-                        {time}
+                      <button key={date.toISOString()} disabled={disabled}
+                        onClick={() => { setSelectedDate(date); setSelectedTime(''); }}
+                        className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
+                          isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 transform scale-110 z-10' :
+                          disabled ? 'text-slate-200 cursor-not-allowed' :
+                          'bg-white text-slate-700 hover:bg-blue-50 hover:text-blue-600 border border-slate-100 hover:border-blue-100'
+                        }`}>
+                        <span className="text-sm font-bold">{format(date, 'd')}</span>
+                        {isToday(date) && !isSelected && <span className="w-1 h-1 bg-blue-500 rounded-full mt-0.5" />}
                       </button>
                     );
                   })}
                 </div>
               </div>
+            </section>
+
+            {/* Step 3: Time */}
+            {selectedDate && (
+              <section className="card animate-fadeIn">
+                <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4">3. Horario</h2>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {availableSlots.map(time => {
+                    const isBusy = busySlots.includes(time);
+                    const isSelected = selectedTime === time;
+                    return (
+                      <button key={time} disabled={isBusy} onClick={() => setSelectedTime(time)}
+                        className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
+                          isSelected ? 'bg-blue-600 text-white shadow-md' :
+                          isBusy ? 'bg-slate-100 text-slate-300 line-through' :
+                          'bg-slate-50 text-slate-700 hover:bg-blue-50 border border-slate-100'
+                        }`}>
+                        {time}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             )}
           </div>
-        )}
 
-        {selectedTime && (
-          <div className="card mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 4 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>4</span>
-              <span className="text-sm font-medium">Tipo de Consulta</span>
-            </div>
-            {step >= 4 && (
-              <div className="space-y-4">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Tipo de cita</span>
-                  <select
-                    value={appointmentType}
-                    onChange={(e) => setAppointmentType(e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-200 p-2.5 text-sm"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {APPOINTMENT_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
+          {/* Details Side */}
+          <div className="lg:col-span-5 space-y-6">
+            <section className="card bg-white border-2 border-blue-100 shadow-xl shadow-blue-900/5 sticky top-8">
+              <h2 className="text-lg font-bold text-slate-900 mb-6">Resumen de Cita</h2>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-2">Detalles de Consulta</label>
+                  <select value={appointmentType} onChange={e => setAppointmentType(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">Tipo de consulta...</option>
+                    {APPOINTMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Notas (opcional)</span>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Describe brevemente tu motivo de consulta..."
-                    className="mt-1 w-full rounded border border-slate-200 p-2.5 text-sm"
-                    rows={3}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-        )}
+                </div>
 
-        {appointmentType && (
-          <div className="card">
-            <h3 className="font-medium text-slate-900 mb-4">Resumen de tu cita</h3>
-            <div className="space-y-2 text-sm text-slate-600">
-              <p><span className="font-medium">Medico:</span> {doctorName}</p>
-              <p><span className="font-medium">Fecha:</span> {selectedDate?.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-              <p><span className="font-medium">Hora:</span> {selectedTime}</p>
-              <p><span className="font-medium">Tipo:</span> {APPOINTMENT_TYPES.find(t => t.value === appointmentType)?.label}</p>
-              {notes && <p><span className="font-medium">Notas:</span> {notes}</p>}
-            </div>
-            <button
-              onClick={handleBook}
-              disabled={loading}
-              className="mt-4 w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-            >
-              {loading ? 'Reservando...' : 'Confirmar Reserva'}
-            </button>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 flex-shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth={2}/></svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Médico</p>
+                      <p className="text-sm font-bold text-slate-800">{doctorName || 'No seleccionado'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 flex-shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth={2}/></svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Fecha y Hora</p>
+                      <p className="text-sm font-bold text-slate-800">
+                        {selectedDate ? format(selectedDate, "d 'de' MMMM", { locale: es }) : 'Día no elegido'}
+                        {selectedTime && ` a las ${selectedTime} hs`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-2">Notas adicionales</label>
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                    placeholder="¿Algún síntoma o motivo específico?"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                </div>
+
+                <button onClick={handleBook} disabled={loading || !selectedTime || !appointmentType}
+                  className="btn-primary w-full shadow-lg shadow-blue-500/20 py-4 text-base disabled:grayscale disabled:opacity-50">
+                  {loading ? 'Procesando...' : 'Confirmar Cita'}
+                </button>
+              </div>
+            </section>
           </div>
-        )}
-          </>
-        )}
+        </div>
       </main>
     </div>
   );
