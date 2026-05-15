@@ -27,6 +27,13 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
+      // Login successful - onAuthStateChanged will handle redirect
+      // If no redirect happens in 5 seconds, reset button
+      setTimeout(() => {
+        if (clicked) {
+          setClicked(false);
+        }
+      }, 5000);
     } catch (err: unknown) {
       const error = err as { code?: string };
       console.error(err);
