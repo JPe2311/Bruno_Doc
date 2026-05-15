@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Appointment, AppointmentStatus } from '@/lib/types/domain';
 import { format, parseISO, isToday, isFuture, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
