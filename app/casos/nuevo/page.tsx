@@ -69,6 +69,33 @@ export default function NuevoCasoPage() {
         };
       });
       setPatients(list);
+      
+      // Check for pre-filled patient from appointment (from URL params)
+      const params = new URLSearchParams(window.location.search);
+      const patientUid = params.get('patientUid');
+      if (patientUid) {
+        const prefill: PatientOption = {
+          uid: patientUid,
+          fullName: params.get('patientName') || '',
+          dni: params.get('patientDni') || '',
+          obraSocial: params.get('patientObraSocial') || '',
+          address: params.get('patientAddress') || '',
+          phone: params.get('patientPhone') || '',
+          email: params.get('patientEmail') || '',
+        };
+        setSelectedPatient(prefill);
+        
+        // Set description with appointment date
+        const apptDate = params.get('appointmentDate');
+        if (apptDate) {
+          const dateObj = new Date(apptDate);
+          const dateStr = dateObj.toLocaleDateString('es-ES', { 
+            year: 'numeric', month: 'long', day: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+          });
+          setDescription(`Atención derivada de cita programada del ${dateStr}.`);
+        }
+      }
     };
     fetchPatients();
   }, [user]);
