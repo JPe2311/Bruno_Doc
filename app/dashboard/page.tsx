@@ -7,25 +7,13 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Appointment } from '@/lib/types/domain';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { format, addDays } from 'date-fns';
+import { format, parseISO, isToday, isSameDay, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-function getNextWeekDates() {
-  const dates = [];
-  const today = new Date();
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(today, i);
-    if (d.getDay() !== 0) {
-      dates.push(d);
-    }
-  }
-  return dates.slice(0, 5);
-}
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [stats, setStats] = useState({ total: 0, completed: 0, noShow: 0, cancelled: 0 });
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,29 +24,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    const fetchStats = async () => {
+    const fetchAppointments = async () => {
       try {
         let q;
         if (user.role === 'PACIENTE') {
           q = query(collection(db, 'appointments'), where('patientUid', '==', user.uid));
+        } else if (user.role === 'MEDICO') {
+          q = query(collection(db, 'appointments'), where('doctorUid', '==', user.uid));
         } else {
           q = query(collection(db, 'appointments'));
         }
         const snap = await getDocs(q);
-        const appointments = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
-        setStats({
-          total: appointments.length,
-          completed: appointments.filter((a) => a.status === 'completed').length,
-          noShow: appointments.filter((a) => a.status === 'no_show').length,
-          cancelled: appointments.filter((a) => a.status === 'cancelled').length,
-        });
+        const apps = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
+        setAppointments(apps.filter(a => a.status !== 'cancelled'));
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     };
-    fetchStats();
+    fetchAppointments();
   }, [user]);
 
   if (authLoading || !user) {
@@ -69,105 +54,158 @@ export default function DashboardPage() {
     );
   }
 
-  const noShowRate = stats.total > 0 ? Math.round((stats.noShow / stats.total) * 100) : 0;
-  const nextDates = getNextWeekDates();
+  const now = new Date();
+  const todayAppointments = appointments.filter(a => {
+    const aptDate = parseISO(a.date);
+    return isSameDay(aptDate, now) && a.status !== 'cancelled';
+  });
+
+  const nextAppointment = appointments
+    .filter(a => {
+      const aptDate = parseISO(a.date);
+      return aptDate > now && a.status !== 'cancelled';
+    })
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())[0];
+
+  const isMedicoOrSecretaria = user.role === 'MEDICO' || user.role === 'SECRETARIA';
 
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar role={user.role} />
-      <main className="flex-1 p-8 space-y-8 max-w-7xl mx-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <main className="flex-1 p-6 max-w-4xl mx-auto space-y-6">
+        <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-              {user.role === 'PACIENTE' ? 'Mis Citas' : 'Panel de Analítica'}
-            </h1>
-            <p className="text-slate-500 mt-1">
-              {format(new Date(), "EEEE d 'de' MMMM, yyyy", { locale: es })}
+            <p className="text-sm text-slate-500">
+              {format(now, "EEEE", { locale: es })} {format(now, "d")} de {format(now, "MMMM", { locale: es })}
             </p>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {format(now, "HH:mm")}
+            </h1>
           </div>
-          {user.role === 'PACIENTE' && (
-            <Link href="/book" className="btn-primary shadow-lg shadow-blue-500/20">
+        </header>
+
+        {isMedicoOrSecretaria && (
+          <div className="flex gap-3">
+            <Link href="/book" className="btn-primary !py-2 !px-4 flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Nueva Cita
             </Link>
-          )}
-        </header>
-
-        {user.role === 'PACIENTE' && (
-          <section className="card border-none bg-gradient-to-br from-blue-600 to-blue-800 text-white p-8 relative overflow-hidden shadow-xl shadow-blue-900/10">
-            {/* Background decoration */}
-            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-48 h-48 bg-sky-400/20 rounded-full blur-2xl pointer-events-none" />
-
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-              <div className="max-w-md">
-                <h2 className="text-2xl font-bold mb-2">Solicitar una Cita</h2>
-                <p className="text-blue-100 opacity-90 text-sm leading-relaxed">
-                  Agende su próxima consulta médica en pocos segundos. Seleccione el profesional y el horario que mejor le convenga.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-5 gap-3">
-                {nextDates.map((date) => (
-                  <Link
-                    key={date.toISOString()}
-                    href={`/book?date=${format(date, 'yyyy-MM-dd')}`}
-                    className="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white hover:text-blue-700 text-center transition-all duration-200 group"
-                  >
-                    <p className="text-[10px] uppercase font-bold tracking-wider opacity-70 group-hover:opacity-100 mb-1">{format(date, 'EEE', { locale: es })}</p>
-                    <p className="text-xl font-black">{format(date, 'd')}</p>
-                    <p className="text-[10px] uppercase font-bold opacity-70 group-hover:opacity-100">{format(date, 'MMM', { locale: es })}</p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </section>
+            <Link href="/onboarding" className="btn-secondary !py-2 !px-4 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Nuevo Paciente
+            </Link>
+          </div>
         )}
 
-        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="card border-l-4 border-l-blue-500">
-            <div className="flex items-center justify-between mb-4">
-              <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-              </span>
+        {isMedicoOrSecretaria && (
+          <div className="card bg-gradient-to-r from-sky-500 to-blue-600 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sky-100 text-sm font-medium">Citas para hoy</p>
+                <p className="text-4xl font-bold">{loading ? '...' : todayAppointments.length}</p>
+              </div>
+              <svg className="w-12 h-12 text-sky-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
             </div>
-            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Citas</p>
-            <p className="text-3xl font-black text-slate-900 mt-2">{loading ? '...' : stats.total}</p>
           </div>
+        )}
 
-          <div className="card border-l-4 border-l-green-500">
-            <div className="flex items-center justify-between mb-4">
-              <span className="p-2 bg-green-50 text-green-600 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
-              </span>
+        {nextAppointment && isMedicoOrSecretaria && (
+          <div className="card border-l-4 border-l-orange-500 bg-orange-50">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1">Próxima Cita</p>
+                <p className="font-bold text-slate-900 text-lg">{nextAppointment.patientName}</p>
+                <p className="text-sm text-slate-600 mt-1">
+                  {format(parseISO(nextAppointment.date), "HH:mm")} hs - {format(parseISO(nextAppointment.date), "d 'de' MMMM", { locale: es })}
+                </p>
+                <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                  <span>{nextAppointment.type}</span>
+                  <span>DNI: {nextAppointment.patientDni || nextAppointment.patientUid.slice(0, 8)}</span>
+                </div>
+              </div>
+              <Link href={`/appointments`} className="btn-secondary !py-1 !px-3 text-xs">
+                Ver todas
+              </Link>
             </div>
-            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Completadas</p>
-            <p className="text-3xl font-black text-green-600 mt-2">{loading ? '...' : stats.completed}</p>
           </div>
+        )}
 
-          <div className="card border-l-4 border-l-amber-500">
-            <div className="flex items-center justify-between mb-4">
-              <span className="p-2 bg-amber-50 text-amber-600 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-              </span>
-              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">{noShowRate}%</span>
-            </div>
-            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">No-show</p>
-            <p className="text-3xl font-black text-amber-600 mt-2">{loading ? '...' : stats.noShow}</p>
-          </div>
+        {user.role === 'PACIENTE' && (
+          <>
+            <section className="card border-none bg-gradient-to-br from-blue-600 to-blue-800 text-white p-6 shadow-lg">
+              <div className="relative z-10">
+                <h2 className="text-xl font-bold mb-2">Solicitar una Cita</h2>
+                <p className="text-blue-100 text-sm mb-4">
+                  Reserve su próxima consulta médica.
+                </p>
+                <Link href="/book" className="btn-primary bg-white text-blue-700 hover:bg-blue-50">
+                  Nueva Cita
+                </Link>
+              </div>
+            </section>
 
-          <div className="card border-l-4 border-l-red-500">
-            <div className="flex items-center justify-between mb-4">
-              <span className="p-2 bg-red-50 text-red-600 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
-              </span>
+            {nextAppointment && (
+              <div className="card border-l-4 border-l-blue-500">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-600 uppercase">Próxima Cita</p>
+                    <p className="font-bold text-slate-900">{nextAppointment.doctorName}</p>
+                    <p className="text-sm text-slate-500">
+                      {format(parseISO(nextAppointment.date), "HH:mm 'hs'")} - {format(parseISO(nextAppointment.date), "d 'de' MMMM", { locale: es })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {isMedicoOrSecretaria && todayAppointments.length > 0 && (
+          <div className="card">
+            <h3 className="font-semibold text-slate-900 mb-4">Citas de Hoy</h3>
+            <div className="space-y-3">
+              {todayAppointments.slice(0, 5).map((a) => (
+                <div key={a.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-slate-700 w-12">{format(parseISO(a.date), 'HH:mm')}</span>
+                    <div>
+                      <p className="font-medium text-slate-900">{a.patientName}</p>
+                      <p className="text-xs text-slate-500">{a.type}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    a.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                    a.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                    'bg-slate-100 text-slate-600'
+                  }`}>
+                    {a.status === 'confirmed' ? 'Confirmada' : a.status === 'pending' ? 'Pendiente' : a.status}
+                  </span>
+                </div>
+              ))}
+              {todayAppointments.length > 5 && (
+                <Link href="/appointments" className="block text-center text-sm text-blue-600 hover:underline">
+                  Ver las {todayAppointments.length} citas de hoy
+                </Link>
+              )}
             </div>
-            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Canceladas</p>
-            <p className="text-3xl font-black text-red-600 mt-2">{loading ? '...' : stats.cancelled}</p>
           </div>
-        </section>
+        )}
       </main>
     </div>
   );
