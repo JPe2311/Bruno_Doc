@@ -43,6 +43,13 @@ function RecipesContent() {
     patientObraSocial: '',
     recommendations: '',
   });
+  const [patientSearch, setPatientSearch] = useState('');
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+
+  const filteredPatients = patients.filter(p => {
+    const search = patientSearch.toLowerCase();
+    return p.fullName?.toLowerCase().includes(search) || p.dni?.toLowerCase().includes(search);
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -161,19 +168,43 @@ function RecipesContent() {
               <button onClick={() => setShowNewForm(false)} className="text-slate-500 hover:text-slate-700">✕</button>
             </div>
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Paciente</label>
-                <select
-                  value={form.patientUid}
+                <input
+                  type="text"
+                  value={patientSearch}
                   onChange={e => {
-                    const p = patients.find(p => p.uid === e.target.value);
-                    setForm({ ...form, patientUid: e.target.value, patientName: p?.fullName || '', patientDni: p?.dni || '', patientObraSocial: p?.obraSocial || '' });
+                    setPatientSearch(e.target.value);
+                    setShowPatientDropdown(true);
                   }}
+                  onFocus={() => setShowPatientDropdown(true)}
+                  placeholder="Buscar paciente por nombre o DNI..."
                   className="w-full border border-slate-200 rounded-lg p-3"
-                >
-                  <option value="">Seleccionar paciente...</option>
-                  {patients.map(p => <option key={p.uid} value={p.uid}>{p.fullName} {p.dni ? `(${p.dni})` : ''}</option>)}
-                </select>
+                />
+                {showPatientDropdown && filteredPatients.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {filteredPatients.map(p => (
+                      <button
+                        key={p.uid}
+                        type="button"
+                        onClick={() => {
+                          setForm({ ...form, patientUid: p.uid, patientName: p.fullName || '', patientDni: p.dni || '', patientObraSocial: p.obraSocial || '' });
+                          setPatientSearch(p.fullName || '');
+                          setShowPatientDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                      >
+                        <span className="font-medium text-slate-900">{p.fullName}</span>
+                        {p.dni && <span className="text-slate-500 text-sm ml-2">DNI: {p.dni}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showPatientDropdown && patientSearch && filteredPatients.length === 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-4 text-center text-slate-500">
+                    No se encontraron pacientes
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Recomendaciones</label>
