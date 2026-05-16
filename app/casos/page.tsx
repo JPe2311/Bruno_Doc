@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -85,6 +85,8 @@ export default function CasosListPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCaso, setSelectedCaso] = useState<(Caso & { id: string }) | null>(null);
   const [doctorAssets, setDoctorAssets] = useState<Record<string, { stampURL: string; bannerURL: string; doctorName: string }>>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteCasoId, setDeleteCasoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -134,6 +136,21 @@ export default function CasosListPage() {
     }
     setFilteredCasos(result);
   }, [filterTipologia, filterPatient, casos]);
+
+  const handleDeleteCaso = async () => {
+    if (!deleteCasoId) return;
+    try {
+      await deleteDoc(doc(db, 'casos', deleteCasoId));
+      setCasos((prev) => prev.filter((c) => c.id !== deleteCasoId));
+      setFilteredCasos((prev) => prev.filter((c) => c.id !== deleteCasoId));
+      toast.success('Caso eliminado');
+      setShowDeleteModal(false);
+      setDeleteCasoId(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al eliminar caso');
+    }
+  };
 
   const handleViewReport = async (caso: Caso & { id: string }) => {
     setSelectedCaso(caso);
