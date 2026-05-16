@@ -32,6 +32,9 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelAppointmentId, setCancelAppointmentId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -94,6 +97,41 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
     } catch (err) {
       console.error(err);
       toast.error('Error al actualizar');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const canCancelAppointment = (appointment: Appointment) => {
+    const aptDate = parseISO(appointment.date);
+    const now = new Date();
+    const hoursUntilAppointment = (aptDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return hoursUntilAppointment > 48;
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!cancelAppointmentId || !cancelReason.trim()) {
+      toast.error('Debe escribir un motivo de cancelación');
+      return;
+    }
+    setProcessingId(cancelAppointmentId);
+    try {
+      await updateDoc(doc(db, 'appointments', cancelAppointmentId), {
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelReason: cancelReason,
+        cancelledBy: user?.uid,
+      });
+      setAppointments((prev) => prev.map((a) => 
+        a.id === cancelAppointmentId ? { ...a, status: 'cancelled' as AppointmentStatus } : a
+      ));
+      toast.success('Cita cancelada');
+      setShowCancelModal(false);
+      setCancelAppointmentId(null);
+      setCancelReason('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al cancelar');
     } finally {
       setProcessingId(null);
     }
@@ -242,6 +280,14 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_CONFIG[a.status as AppointmentStatus]?.bg || 'bg-slate-100'} ${STATUS_CONFIG[a.status as AppointmentStatus]?.color || 'text-slate-700'}`}>
                                   {STATUS_CONFIG[a.status as AppointmentStatus]?.label || a.status}
                                 </span>
+                                {isDoctor && a.status !== 'cancelled' && (
+                                  <button
+                                    onClick={() => { setCancelAppointmentId(a.id); setShowCancelModal(true); }}
+                                    className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700"
+                                  >
+                                    Cancelar
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => router.push(`/pacientes/${a.patientUid}`)}
                                   className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
@@ -378,10 +424,59 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                         Ver Reporte
                       </Link>
                     )}
+                    {role === 'PACIENTE' && a.status !== 'cancelled' && (
+                      <button
+                        onClick={() => {
+                          if (!canCancelAppointment(a)) {
+                            toast.error('Solo puede cancelar citas con al menos 48 horas de anticipación');
+                            return;
+                          }
+                          setCancelAppointmentId(a.id);
+                          setShowCancelModal(true);
+                        }}
+                        className="btn-secondary !py-2 !px-4 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        Cancelar Cita
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {showCancelModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Cancelar Cita</h3>
+              <p className="text-sm text-slate-600 mb-4">¿Está seguro de que desea cancelar esta cita?</p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Motivo de cancelación</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  placeholder="Escriba el motivo de la cancelación..."
+                  className="w-full border border-slate-200 rounded-lg p-3"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowCancelModal(false); setCancelAppointmentId(null); setCancelReason(''); }}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCancelAppointment}
+                  disabled={processingId === cancelAppointmentId}
+                  className="flex-1 btn-primary bg-red-600 hover:bg-red-700"
+                >
+                  {processingId === cancelAppointmentId ? 'Cancelando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
