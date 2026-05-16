@@ -200,7 +200,7 @@ function BookAppointmentContent() {
         doctorUid: selectedDoctorUid,
         doctorName,
         date: `${dateStr}T${selectedTime}:00`,
-        status: 'pending',
+        status: isMedicoOrSecretaria ? 'confirmed' : 'pending',
         type: APPOINTMENT_TYPES.find(t => t.value === appointmentType)?.label || appointmentType,
         notes: notes || '',
         createdAt: new Date().toISOString(),
