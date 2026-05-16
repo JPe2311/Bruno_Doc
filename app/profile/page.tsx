@@ -96,7 +96,7 @@ export default function ProfilePage() {
         setUploading(false);
         return;
       }
-      const storageRef = ref(storage, `${type}s/${user.uid}_${Date.now()}_${file.name}`);
+      const storageRef = ref(storage, `users/${user.uid}/${type}s/${file.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       await setDoc(doc(db, 'users', user.uid), { [`${type}URL`]: url }, { merge: true });
