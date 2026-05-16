@@ -2,116 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Helper functions ──────────────────────────────────────────────────────
-
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return isSignedIn() && request.auth.uid == uid;
-    }
-
-    function userRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-    }
-
-    function isMedico() {
-      return isSignedIn() && userRole() == 'MEDICO';
-    }
-
-    function isSecretaria() {
-      return isSignedIn() && userRole() == 'SECRETARIA';
-    }
-
-    function isMedicoOrSecretaria() {
-      return isMedico() || isSecretaria();
-    }
-
-    // ── USERS ─────────────────────────────────────────────────────────────────
-    // - Each user reads/writes their own profile
-    // - MEDICO / SECRETARIA can read any user (to look up patients)
-    // - Role field is IMMUTABLE from the client (cannot be changed by the user)
-
+    // USERS - Allow authenticated users to read/write their own profile
     match /users/{uid} {
-      allow read: if isOwner(uid) || isMedicoOrSecretaria();
-      allow create: if isOwner(uid) && request.resource.data.role == 'PACIENTE';
-      allow update: if isOwner(uid)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == uid;
     }
 
-    // ── CASOS (Clinical Cases) ────────────────────────────────────────────────
-    // - MEDICO: full CRUD
-    // - SECRETARIA: read + create (no clinical edits, no delete)
-    // - PACIENTE: read their own cases only
-
+    // CASOS - Allow any authenticated user to create/read/update/delete
     match /casos/{caseId} {
-      allow read: if isMedico()
-        || isSecretaria()
-        || (isSignedIn() && resource.data.patientUid == request.auth.uid);
-      allow create: if isMedicoOrSecretaria();
-      allow update: if isMedico();
-      allow delete: if isMedico();
+      allow read, create, update, delete: if isSignedIn();
     }
 
-    // ── MEDICAL RECORDS ───────────────────────────────────────────────────────
-    // - MEDICO: full CRUD
-    // - PACIENTE: read their own
-
+    // MEDICAL RECORDS
     match /medical_records/{id} {
-      allow read: if isMedico()
-        || (isSignedIn() && resource.data.patientUid == request.auth.uid);
-      allow create, update: if isMedico();
-      allow delete: if isMedico();
+      allow read, create, update, delete: if isSignedIn();
     }
 
-    // ── APPOINTMENTS ──────────────────────────────────────────────────────────
-    // - MEDICO / SECRETARIA: full read + manage
-    // - PACIENTE: read + create their own; cannot update/delete
-
+    // APPOINTMENTS
     match /appointments/{id} {
-      allow read: if isMedicoOrSecretaria()
-        || (isSignedIn() && resource.data.patientUid == request.auth.uid);
-      allow create: if isSignedIn() && (
-        isMedicoOrSecretaria()
-        || request.resource.data.patientUid == request.auth.uid
-      );
-      allow update: if isMedicoOrSecretaria();
-      allow delete: if isMedico();
+      allow read, create, update, delete: if isSignedIn();
     }
 
-    // ── SLOTS ─────────────────────────────────────────────────────────────────
-
+    // SLOTS
     match /slots/{slotId} {
-      allow read: if isSignedIn();
-      allow create, update: if isMedicoOrSecretaria();
-      allow delete: if isMedico();
+      allow read, create, update, delete: if isSignedIn();
     }
 
-    // ── SCHEDULES ─────────────────────────────────────────────────────────────
-    // Only the owning doctor can write their own schedule
-
+    // SCHEDULES
     match /schedules/{doctorUid} {
-      allow read: if isSignedIn();
-      allow write: if isMedico() && request.auth.uid == doctorUid;
+      allow read, write: if isSignedIn();
     }
 
-    // ── CATALOG TABLES ────────────────────────────────────────────────────────
-
+    // CATALOG TABLES
     match /catalog_tables/{id} {
-      allow read: if isSignedIn();
-      allow write: if isMedico();
+      allow read, write: if isSignedIn();
     }
 
-    // ── AUDIT LOGS ────────────────────────────────────────────────────────────
-    // - Any authenticated user can CREATE their own log entry
-    // - Only MEDICO can READ audit logs
-    // - Nobody can UPDATE or DELETE (immutable)
-
+    // AUDIT LOGS
     match /audit_logs/{logId} {
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow read: if isMedico();
+      allow read, create: if isSignedIn();
       allow update, delete: if false;
     }
   }

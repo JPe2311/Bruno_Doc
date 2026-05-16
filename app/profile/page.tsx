@@ -85,6 +85,17 @@ export default function ProfilePage() {
     const setUploading = type === 'banner' ? setUploadingBanner : setUploadingStamp;
     setUploading(true);
     try {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('El archivo debe ser menor a 5MB');
+        setUploading(false);
+        return;
+      }
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Solo se permiten archivos PNG, JPEG o WebP');
+        setUploading(false);
+        return;
+      }
       const storageRef = ref(storage, `${type}s/${user.uid}_${Date.now()}_${file.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
@@ -92,9 +103,10 @@ export default function ProfilePage() {
       if (type === 'banner') setBannerURL(url);
       else setStampURL(url);
       toast.success(`${type === 'banner' ? 'Banner' : 'Sello'} actualizado correctamente`);
-    } catch (err) {
-      console.error(err);
-      toast.error(`Error al subir ${type === 'banner' ? 'banner' : 'sello'}`);
+    } catch (err: unknown) {
+      console.error('Upload error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error(`Error al subir ${type === 'banner' ? 'banner' : 'sello'}: ${errorMessage}`);
     } finally {
       setUploading(false);
     }

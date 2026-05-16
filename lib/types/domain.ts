@@ -14,6 +14,7 @@ export interface Appointment {
   id: string;
   patientUid: string;
   patientName: string;
+  patientDni?: string;
   doctorUid: string;
   doctorName: string;
   date: string;
@@ -75,6 +76,19 @@ export interface Caso {
   diagnosis?: string;
   treatment?: string;
   notes?: string;
+  createdAt: string;
+}
+
+export interface Recipe {
+  id: string;
+  patientUid: string;
+  patientName: string;
+  patientDni?: string;
+  patientObraSocial?: string;
+  doctorUid: string;
+  doctorName: string;
+  date: string;
+  recommendations: string;
   createdAt: string;
 }
 

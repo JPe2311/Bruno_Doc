@@ -120,6 +120,7 @@ function BookAppointmentContent() {
       batch.set(appRef, {
         patientUid: user.uid,
         patientName: user.fullName || 'Paciente',
+        patientDni: user.dni || '',
         doctorUid: selectedDoctorUid,
         doctorName,
         date: `${dateStr}T${selectedTime}:00`,

@@ -26,10 +26,12 @@ export default function AppointmentsPage() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('all');
+const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('all');
   const [caseMap, setCaseMap] = useState<Set<string>>(new Set());
-  const [doctorClinic, setDoctorClinic] = useState({ address: '', maps: '', phone: '' });
+  const [doctorClinic, setDoctorClinic] = useState<{ address: string; maps: string; phone: string }>({ address: '', maps: '', phone: '' });
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -130,6 +132,23 @@ export default function AppointmentsPage() {
           )}
         </header>
 
+        {isDoctor && (
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Vista Calendario
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Vista Lista
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 p-1 bg-slate-200/50 rounded-xl w-fit">
           {(['all', 'upcoming', 'pending', 'past'] as const).map((f) => {
             if (f === 'pending' && !isDoctor) return null;
@@ -158,6 +177,87 @@ export default function AppointmentsPage() {
             </div>
             <p className="text-slate-500 font-medium">No se encontraron citas</p>
             {role === 'PACIENTE' && <Link href="/book" className="text-blue-600 font-semibold mt-2 hover:underline">Solicitar mi primera cita</Link>}
+          </div>
+        ) : viewMode === 'calendar' ? (
+          <div className="space-y-3">
+            {(() => {
+              const appointmentsByDate: Record<string, typeof filteredAppointments> = {};
+              filteredAppointments.forEach((a) => {
+                const dayKey = a.date.slice(0, 10);
+                if (!appointmentsByDate[dayKey]) appointmentsByDate[dayKey] = [];
+                appointmentsByDate[dayKey].push(a);
+              });
+              const sortedDays = Object.keys(appointmentsByDate).sort();
+              return sortedDays.map((dayKey) => {
+                const dayAppointments = appointmentsByDate[dayKey];
+                const dayDate = parseISO(dayKey);
+                const isExpanded = expandedDays.has(dayKey);
+                const hasPending = dayAppointments.some(a => a.status === 'pending');
+                return (
+                  <div key={dayKey} className="border rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => {
+                        const newExpanded = new Set(expandedDays);
+                        if (isExpanded) newExpanded.delete(dayKey);
+                        else newExpanded.add(dayKey);
+                        setExpandedDays(newExpanded);
+                      }}
+                      className={`w-full px-5 py-4 flex items-center justify-between transition-colors ${
+                        isExpanded ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>
+                          <span className="text-xs font-bold">{format(dayDate, 'EEE', { locale: es })}</span>
+                          <span className="text-lg font-bold">{format(dayDate, 'd')}</span>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold text-slate-900">{format(dayDate, "EEEE d 'de' MMMM", { locale: es })}</p>
+                          <p className="text-sm text-slate-500">{dayAppointments.length} cita{dayAppointments.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasPending && <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">Pendientes</span>}
+                        <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="bg-slate-50 p-4 space-y-2">
+                        {dayAppointments.map((a) => {
+                          const aptTime = format(parseISO(a.date), 'HH:mm');
+                          const isPending = a.status === 'pending';
+                          const isConfirmed = a.status === 'confirmed';
+                          return (
+                            <div key={a.id} className={`flex items-center justify-between p-3 rounded-lg border ${isPending ? 'bg-orange-50 border-orange-200' : isConfirmed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-slate-700 w-12">{aptTime}</span>
+                                <div>
+                                  <p className="font-medium text-slate-900">{a.patientName}</p>
+                                  <p className="text-xs text-slate-500">DNI: {a.patientDni || a.patientUid.slice(0, 8)}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_CONFIG[a.status as AppointmentStatus]?.bg || 'bg-slate-100'} ${STATUS_CONFIG[a.status as AppointmentStatus]?.color || 'text-slate-700'}`}>
+                                  {STATUS_CONFIG[a.status as AppointmentStatus]?.label || a.status}
+                                </span>
+                                <button
+                                  onClick={() => router.push(`/pacientes/${a.patientUid}`)}
+                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
+                                >
+                                  Ver HC
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">

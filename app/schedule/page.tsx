@@ -105,7 +105,7 @@ export default function SchedulePage() {
         <div className="card mb-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Dias de Atencion</h2>
           <div className="grid grid-cols-7 gap-2">
-            {(Object.entries(DAY_LABELS) as [DayOfWeek, string][]).map(([day, label]) => (
+            {(Object.keys(DAY_LABELS).map(Number) as unknown as DayOfWeek[]).map((day) => (
               <button
                 key={day}
                 onClick={() => toggleDay(day)}
@@ -113,7 +113,7 @@ export default function SchedulePage() {
                   enabledDays[day] ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
               >
-                {label}
+                {DAY_LABELS[day]}
               </button>
             ))}
           </div>

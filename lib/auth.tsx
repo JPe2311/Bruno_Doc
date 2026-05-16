@@ -10,6 +10,10 @@ interface UserData {
   role: 'MEDICO' | 'SECRETARIA' | 'PACIENTE';
   fullName: string;
   onboardingCompleted?: boolean;
+  dni?: string;
+  phone?: string;
+  address?: string;
+  obraSocial?: string;
 }
 
 interface AuthContextType {
