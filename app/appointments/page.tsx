@@ -221,19 +221,17 @@ export default function AppointmentsPage() {
                               const patientSnap = await getDoc(doc(db, 'users', a.patientUid));
                               if (patientSnap.exists()) {
                                 const patientData = patientSnap.data();
-                                router.push({
-                                  pathname: '/casos/nuevo',
-                                  query: {
-                                    patientUid: a.patientUid,
-                                    patientName: a.patientName,
-                                    patientDni: patientData.dni || '',
-                                    patientPhone: patientData.phone || '',
-                                    patientEmail: patientData.email || '',
-                                    patientObraSocial: patientData.obraSocial || '',
-                                    patientAddress: patientData.address || '',
-                                    appointmentDate: a.date,
-                                  },
+                                const params = new URLSearchParams({
+                                  patientUid: a.patientUid,
+                                  patientName: a.patientName,
+                                  patientDni: patientData.dni || '',
+                                  patientPhone: patientData.phone || '',
+                                  patientEmail: patientData.email || '',
+                                  patientObraSocial: patientData.obraSocial || '',
+                                  patientAddress: patientData.address || '',
+                                  appointmentDate: a.date,
                                 });
+                                router.push(`/casos/nuevo?${params.toString()}`);
                               }
                             } catch (err) {
                               console.error(err);
