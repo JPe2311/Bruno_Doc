@@ -7,8 +7,10 @@ service cloud.firestore {
     }
 
     // USERS - Allow authenticated users to read/write their own profile
+    // MEDICO and SECRETARIA can create new patients
     match /users/{uid} {
       allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.role in ['PACIENTE', 'MEDICO', 'SECRETARIA'];
       allow write: if isSignedIn() && request.auth.uid == uid;
     }
 

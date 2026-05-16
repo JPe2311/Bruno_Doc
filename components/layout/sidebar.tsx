@@ -91,12 +91,20 @@ export function Sidebar({ role }: { role: string }) {
       {/* Bottom actions */}
       <div className="px-3 pb-5 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '0.75rem' }}>
         {role === 'MEDICO' && (
-          <Link href="/admin/tipologias"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-            style={{ color: 'rgba(255,255,255,0.5)' }}>
-            <Icon d="M4 6h16M4 12h16m-7 6h7" />
-            Tipologías
-          </Link>
+          <>
+            <Link href="/admin/tipologias"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+              style={{ color: 'rgba(255,255,255,0.5)' }}>
+              <Icon d="M4 6h16M4 12h16m-7 6h7" />
+              Tipologías
+            </Link>
+            <Link href="/admin/delete-requests"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+              style={{ color: 'rgba(255,255,255,0.5)' }}>
+              <Icon d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              Solicitudes de Baja
+            </Link>
+          </>
         )}
         <Link href="/profile"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"

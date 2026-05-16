@@ -283,7 +283,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                                 {isDoctor && a.status !== 'cancelled' && (
                                   <button
                                     onClick={() => { setCancelAppointmentId(a.id); setShowCancelModal(true); }}
-                                    className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700"
+                                    className="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-lg hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 transition-colors"
                                   >
                                     Cancelar
                                   </button>
@@ -434,7 +434,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                           setCancelAppointmentId(a.id);
                           setShowCancelModal(true);
                         }}
-                        className="btn-secondary !py-2 !px-4 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                        className="!py-2 !px-4 text-xs text-slate-400 hover:text-red-600 transition-colors"
                       >
                         Cancelar Cita
                       </button>

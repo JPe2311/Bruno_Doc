@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { printReportHTML } from '@/lib/printReport';
 import { Caso } from '@/lib/types/domain';
 import { format, parseISO } from 'date-fns';
@@ -281,6 +282,14 @@ export default function CasosListPage() {
                           >
                             Imprimir
                           </button>
+                          {user?.role === 'MEDICO' && (
+                            <button
+                              onClick={() => { setDeleteCasoId(c.id); setShowDeleteModal(true); }}
+                              className="px-3 py-1.5 rounded text-xs font-medium text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              Eliminar
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -385,6 +394,29 @@ export default function CasosListPage() {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Eliminar Caso</h3>
+              <p className="text-sm text-slate-600 mb-4">¿Está seguro de que desea eliminar este caso? Esta acción no se puede deshacer.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeleteCasoId(null); }}
+                  className="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteCaso}
+                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                >
+                  Eliminar
+                </button>
               </div>
             </div>
           </div>

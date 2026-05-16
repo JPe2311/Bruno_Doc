@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { collection, query, getDocs, getDoc, doc, where } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, doc, where, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useRouter, useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { printReportHTML } from '@/lib/printReport';
 import { Caso } from '@/lib/types/domain';
 import { format, parseISO } from 'date-fns';
@@ -64,8 +65,33 @@ export default function PatientDetailPage() {
   const [casos, setCasos] = useState<(Caso & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [doctorAssets, setDoctorAssets] = useState<Record<string, { stampURL: string; bannerURL: string }>>({});
+  const [showDeleteRequestModal, setShowDeleteRequestModal] = useState(false);
 
   const isOwnProfile = user && patientUid === user.uid;
+
+  const handleRequestDelete = async () => {
+    if (!user) return;
+    try {
+      const existingQ = query(collection(db, 'deletion_requests'), where('patientUid', '==', user.uid), where('status', '==', 'pending'));
+      const existingSnap = await getDocs(existingQ);
+      if (!existingSnap.empty) {
+        toast.error('Ya tienes una solicitud pendiente');
+        return;
+      }
+      await addDoc(collection(db, 'deletion_requests'), {
+        patientUid: user.uid,
+        patientName: patientData?.fullName || '',
+        patientDni: patientData?.dni || '',
+        requestedAt: new Date().toISOString(),
+        status: 'pending',
+      });
+      toast.success('Solicitud enviada. Un médico revisará tu pedido.');
+      setShowDeleteRequestModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al enviar solicitud');
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -134,6 +160,14 @@ export default function PatientDetailPage() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
               {isOwnProfile ? 'Mis Reportes Médicos' : `Historia Clínica: ${patientData?.fullName}`}
             </h1>
+            {isOwnProfile && (
+              <button
+                onClick={() => setShowDeleteRequestModal(true)}
+                className="text-sm text-slate-400 hover:text-red-500 transition-colors"
+              >
+                Solicitar eliminación de mi historia clínica
+              </button>
+            )}
           </div>
         </header>
 
@@ -236,6 +270,35 @@ export default function PatientDetailPage() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {showDeleteRequestModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Solicitar Eliminación de Historia Clínica</h3>
+              <p className="text-sm text-slate-600 mb-4">
+                ¿Está seguro de solicitar la eliminación de toda su historia clínica? 
+                Esta acción requiere aprobación de un médico y no se puede deshacer.
+              </p>
+              <p className="text-xs text-slate-500 mb-4">
+                Se eliminarán: todos sus casos, turnos y datos de perfil.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteRequestModal(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRequestDelete}
+                  className="flex-1 btn-primary bg-red-600 hover:bg-red-700"
+                >
+                  Solicitar Eliminación
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
