@@ -141,14 +141,16 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
   const role = (user as { role?: string })?.role ?? 'PACIENTE';
   const isDoctor = role !== 'PACIENTE';
 
-  const filteredAppointments = appointments.filter(a => {
-    const date = parseISO(a.date);
-    const isPending = a.status === 'pending';
-    if (filter === 'upcoming') return isFuture(date) || isToday(date) || isPending;
-    if (filter === 'past') return isPast(date) && !isToday(date);
-    if (filter === 'pending') return isPending;
-    return true;
-  });
+  const filteredAppointments = appointments
+    .filter(a => {
+      const date = parseISO(a.date);
+      const isPending = a.status === 'pending';
+      if (filter === 'upcoming') return isFuture(date) || isToday(date) || isPending;
+      if (filter === 'past') return isPast(date) && !isToday(date);
+      if (filter === 'pending') return isPending;
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   if (authLoading || !user) {
     return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="spinner" /></div>;
@@ -298,7 +300,9 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                                 <div key={a.id} className={`flex items-center justify-between p-2 rounded-lg border text-sm ${isPending ? 'bg-orange-50 border-orange-200' : isConfirmed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className={`font-bold text-xs ${isPending ? 'text-orange-700' : isConfirmed ? 'text-green-700' : 'text-slate-700'}`}>{aptTime}</span>
-                                    <span className="truncate text-xs">{a.patientName}</span>
+                                    <Link href={`/pacientes/${a.patientUid}`} className="truncate text-xs text-blue-600 hover:underline font-medium">
+                                      {a.patientName}
+                                    </Link>
                                   </div>
                                   <div className="flex gap-1 ml-1">
                                     {isDoctor && isPending && (
