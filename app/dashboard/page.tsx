@@ -4,6 +4,7 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { Appointment } from '@/lib/types/domain';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -60,6 +61,8 @@ export default function DashboardPage() {
     return isSameDay(aptDate, now) && a.status !== 'cancelled';
   });
 
+  const pendingAppointments = appointments.filter(a => a.status === 'pending');
+
   const nextAppointment = appointments
     .filter(a => {
       const aptDate = parseISO(a.date);
@@ -71,32 +74,41 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar role={user.role} />
-      <main className="flex-1 p-6 max-w-4xl mx-auto space-y-6">
+      <div className="hidden lg:block">
+        <Sidebar role={user.role} />
+      </div>
+      <MobileHeader role={user.role} />
+      <main className="flex-1 p-4 md:p-6 max-w-4xl mx-auto space-y-6 pt-16 lg:pt-6">
         <header className="flex items-center justify-between">
           <div>
             <p className="text-sm text-slate-500">
               {format(now, "EEEE", { locale: es })} {format(now, "d")} de {format(now, "MMMM", { locale: es })}
             </p>
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900">
               {format(now, "HH:mm")}
             </h1>
+          </div>
+          <div className="lg:hidden text-right">
+            <p className="text-xs text-slate-500">Citas hoy</p>
+            <p className="text-2xl font-bold text-blue-600">{todayAppointments.length}</p>
           </div>
         </header>
 
         {isMedicoOrSecretaria && (
-          <div className="flex gap-3">
-            <Link href="/book" className="btn-primary !py-2 !px-4 flex items-center gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/book" className="btn-primary !py-2 !px-3 md:!px-4 flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nueva Cita
+              <span className="hidden sm:inline">Nueva Cita</span>
+              <span className="sm:hidden">Cita</span>
             </Link>
-            <Link href="/book" className="btn-secondary !py-2 !px-4 flex items-center gap-2">
+            <Link href="/book" className="btn-secondary !py-2 !px-3 md:!px-4 flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
-              Nuevo Paciente
+              <span className="hidden sm:inline">Nuevo Paciente</span>
+              <span className="sm:hidden">Paciente</span>
             </Link>
           </div>
         )}
@@ -111,6 +123,20 @@ export default function DashboardPage() {
               <svg className="w-12 h-12 text-sky-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
+            </div>
+</div>
+          )}
+
+        {isMedicoOrSecretaria && pendingAppointments.length > 0 && (
+          <div className="lg:hidden card bg-orange-50 border border-orange-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-700 text-sm font-medium">Pendientes de aprobación</p>
+                <p className="text-3xl font-bold text-orange-600">{pendingAppointments.length}</p>
+              </div>
+              <Link href="/appointments" className="text-sm text-orange-600 hover:underline font-medium">
+                Ver →
+              </Link>
             </div>
           </div>
         )}
@@ -143,7 +169,10 @@ export default function DashboardPage() {
 
         {user.role === 'PACIENTE' && (
           <>
-            <section className="card border-none bg-gradient-to-br from-blue-600 to-blue-800 text-white p-6 shadow-lg">
+            <Link href="/book" className="lg:hidden block w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-bold text-center shadow-lg">
+              + Reservar Nueva Cita
+            </Link>
+            <section className="hidden lg:block card border-none bg-gradient-to-br from-blue-600 to-blue-800 text-white p-6 shadow-lg">
               <div className="relative z-10">
                 <h2 className="text-xl font-bold mb-2">Solicitar una Cita</h2>
                 <p className="text-blue-100 text-sm mb-4">
