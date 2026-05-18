@@ -68,22 +68,27 @@ function RecipesContent() {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        if (data.bannerURL) setDoctorBanner(data.bannerURL);
-        if (data.stampURL) setDoctorStamp(data.stampURL);
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.bannerURL) setDoctorBanner(data.bannerURL);
+          if (data.stampURL) setDoctorStamp(data.stampURL);
+        }
+        const q = query(collection(db, 'recipes'), where('doctorUid', '==', user.uid));
+        const snap = await getDocs(q);
+        setRecipes(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+        
+        const patientsQ = query(collection(db, 'users'));
+        const patientsSnap = await getDocs(patientsQ);
+        const allPatients = patientsSnap.docs
+          .map(d => ({ uid: d.id, ...d.data() } as any))
+          .filter(p => p.role === 'PACIENTE' || !p.role);
+        console.log('Patients loaded:', allPatients.length);
+        setPatients(allPatients);
+      } catch (err) {
+        console.error('Error loading data:', err);
       }
-      const q = query(collection(db, 'recipes'), where('doctorUid', '==', user.uid));
-      const snap = await getDocs(q);
-      setRecipes(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
-      
-      const patientsQ = query(collection(db, 'users'));
-      const patientsSnap = await getDocs(patientsQ);
-      const allPatients = patientsSnap.docs
-        .map(d => ({ uid: d.id, ...d.data() } as any))
-        .filter(p => p.role === 'PACIENTE' || !p.role);
-      setPatients(allPatients);
     };
     fetchData();
   }, [user]);
