@@ -8,7 +8,7 @@ import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Appointment, AppointmentStatus } from '@/lib/types/domain';
-import { format, parseISO, isToday, isFuture, isPast } from 'date-fns';
+import { format, parseISO, isToday, isFuture, isPast, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
@@ -223,20 +223,35 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
         ) : viewMode === 'calendar' ? (
           <div className="space-y-3">
             {(() => {
-              const appointmentsByDate: Record<string, typeof filteredAppointments> = {};
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              const allDays: string[] = [];
+              const dayMap: Record<string, Appointment[]> = {};
+              
               filteredAppointments.forEach((a) => {
                 const dayKey = a.date.slice(0, 10);
-                if (!appointmentsByDate[dayKey]) appointmentsByDate[dayKey] = [];
-                appointmentsByDate[dayKey].push(a);
+                if (!dayMap[dayKey]) {
+                  dayMap[dayKey] = [];
+                  allDays.push(dayKey);
+                }
+                dayMap[dayKey].push(a);
               });
-              const sortedDays = Object.keys(appointmentsByDate).sort();
+              
+              const sortedDays = allDays.sort((a, b) => a.localeCompare(b));
+              
               return sortedDays.map((dayKey) => {
-                const dayAppointments = appointmentsByDate[dayKey];
+                const dayAppointments = dayMap[dayKey] || [];
                 const dayDate = parseISO(dayKey);
                 const isExpanded = expandedDays.has(dayKey);
                 const hasPending = dayAppointments.some(a => a.status === 'pending');
+                const hasConfirmed = dayAppointments.some(a => a.status === 'confirmed');
+                
+                const isPast = dayDate < today;
+                const isToday = isSameDay(dayDate, today);
+                
                 return (
-                  <div key={dayKey} className="border rounded-xl overflow-hidden">
+                  <div key={dayKey} className={`border rounded-xl overflow-hidden ${isPast ? 'opacity-60' : ''}`}>
                     <button
                       onClick={() => {
                         const newExpanded = new Set(expandedDays);
@@ -244,64 +259,63 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                         else newExpanded.add(dayKey);
                         setExpandedDays(newExpanded);
                       }}
-                      className={`w-full px-5 py-4 flex items-center justify-between transition-colors ${
-                        isExpanded ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'
+                      className={`w-full px-4 py-3 flex items-center justify-between transition-colors ${
+                        isExpanded ? 'bg-blue-50' : isToday ? 'bg-blue-50/50' : 'bg-white hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>
-                          <span className="text-xs font-bold">{format(dayDate, 'EEE', { locale: es })}</span>
-                          <span className="text-lg font-bold">{format(dayDate, 'd')}</span>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-sm ${isToday ? 'bg-blue-600 text-white' : isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>
+                          <span className="text-[10px] font-bold">{format(dayDate, 'EEE', { locale: es })}</span>
+                          <span className="font-bold">{format(dayDate, 'd')}</span>
                         </div>
                         <div className="text-left">
-                          <p className="font-bold text-slate-900">{format(dayDate, "EEEE d 'de' MMMM", { locale: es })}</p>
-                          <p className="text-sm text-slate-500">{dayAppointments.length} cita{dayAppointments.length !== 1 ? 's' : ''}</p>
+                          <p className="font-semibold text-slate-900 text-sm">{format(dayDate, "EEEE d 'de' MMMM", { locale: es })}</p>
+                          <p className="text-xs text-slate-500">
+                            {dayAppointments.length} cita{dayAppointments.length !== 1 ? 's' : ''}
+                            {hasConfirmed && ' • Confirmadas'}
+                            {hasPending && ' • Pendientes'}
+                            {isToday && ' • Hoy'}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {hasPending && <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">Pendientes</span>}
+                        {isToday && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">HOY</span>}
                         <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </div>
                     </button>
                     {isExpanded && (
-                      <div className="bg-slate-50 p-4 space-y-2">
-                        {dayAppointments.map((a) => {
-                          const aptTime = format(parseISO(a.date), 'HH:mm');
-                          const isPending = a.status === 'pending';
-                          const isConfirmed = a.status === 'confirmed';
-                          return (
-                            <div key={a.id} className={`flex items-center justify-between p-3 rounded-lg border ${isPending ? 'bg-orange-50 border-orange-200' : isConfirmed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
-                              <div className="flex items-center gap-3">
-                                <span className="font-bold text-slate-700 w-12">{aptTime}</span>
-                                <div>
-                                  <p className="font-medium text-slate-900">{a.patientName}</p>
-                                  <p className="text-xs text-slate-500">DNI: {a.patientDni || a.patientUid.slice(0, 8)}</p>
+                      <div className="bg-slate-50 p-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {dayAppointments
+                            .sort((a, b) => a.date.localeCompare(b.date))
+                            .map((a) => {
+                              const aptTime = format(parseISO(a.date), 'HH:mm');
+                              const isPending = a.status === 'pending';
+                              const isConfirmed = a.status === 'confirmed';
+                              return (
+                                <div key={a.id} className={`flex items-center justify-between p-2 rounded-lg border text-sm ${isPending ? 'bg-orange-50 border-orange-200' : isConfirmed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className={`font-bold text-xs ${isPending ? 'text-orange-700' : isConfirmed ? 'text-green-700' : 'text-slate-700'}`}>{aptTime}</span>
+                                    <span className="truncate text-xs">{a.patientName}</span>
+                                  </div>
+                                  <div className="flex gap-1 ml-1">
+                                    {isDoctor && isPending && (
+                                      <button onClick={() => handleUpdateStatus(a.id, 'confirmed')} className="p-1 text-green-600 hover:bg-green-100 rounded" title="Confirmar">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                                      </button>
+                                    )}
+                                    {isDoctor && isPending && (
+                                      <button onClick={() => handleUpdateStatus(a.id, 'cancelled')} className="p-1 text-red-600 hover:bg-red-100 rounded" title="Rechazar">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_CONFIG[a.status as AppointmentStatus]?.bg || 'bg-slate-100'} ${STATUS_CONFIG[a.status as AppointmentStatus]?.color || 'text-slate-700'}`}>
-                                  {STATUS_CONFIG[a.status as AppointmentStatus]?.label || a.status}
-                                </span>
-                                {isDoctor && a.status !== 'cancelled' && (
-                                  <button
-                                    onClick={() => { setCancelAppointmentId(a.id); setShowCancelModal(true); }}
-                                    className="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-lg hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 transition-colors"
-                                  >
-                                    Cancelar
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => router.push(`/pacientes/${a.patientUid}`)}
-                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
-                                >
-                                  Ver HC
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                              );
+                            })}
+                        </div>
                       </div>
                     )}
                   </div>
