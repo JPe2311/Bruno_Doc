@@ -54,24 +54,31 @@ export default function StatisticsPage() {
       try {
         const now = new Date();
         let startDate: Date;
-        let endDate: Date = now;
+        let endDate: Date = new Date();
 
         switch (period) {
           case 'today':
-            startDate = new Date(now.setHours(0, 0, 0, 0));
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
             break;
           case 'week':
             startDate = startOfWeek(now, { weekStartsOn: 1 });
+            endDate = endOfWeek(now, { weekStartsOn: 1 });
             break;
           case 'month':
             startDate = startOfMonth(now);
+            endDate = endOfMonth(now);
             break;
           case 'year':
             startDate = new Date(now.getFullYear(), 0, 1);
+            endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
             break;
           default:
             startDate = new Date(2020, 0, 1);
+            endDate = new Date(2099, 11, 31, 23, 59, 59);
         }
+
+        console.log('Fetching stats for period:', period, 'from', startDate, 'to', endDate);
 
         const appointmentsQ = query(collection(db, 'appointments'));
         const appointmentsSnap = await getDocs(appointmentsQ);
@@ -79,10 +86,15 @@ export default function StatisticsPage() {
           id: string; date: string; status: string; type: string; patientUid: string; patientName: string; patientDni: string;
         }>;
 
+        console.log('Total appointments in DB:', appointments.length);
+
         const filteredAppointments = appointments.filter(a => {
           const aptDate = parseISO(a.date);
-          return isWithinInterval(aptDate, { start: startDate, end: endDate });
+          const inRange = isWithinInterval(aptDate, { start: startDate, end: endDate });
+          return inRange;
         });
+        
+        console.log('Filtered appointments:', filteredAppointments.length);
 
         const confirmedCount = filteredAppointments.filter(a => a.status === 'confirmed').length;
         const cancelledCount = filteredAppointments.filter(a => a.status === 'cancelled').length;
