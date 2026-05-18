@@ -4,6 +4,7 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -23,16 +24,20 @@ export default function PatientsPage() {
     if (!user || user.role === 'PACIENTE') return;
     const fetchPatients = async () => {
       try {
-        const q = query(collection(db, 'users'), where('role', '==', 'PACIENTE'));
+        const q = query(collection(db, 'users'));
         const snap = await getDocs(q);
-        setPatients(snap.docs.map(d => ({
-          uid: d.id,
-          fullName: d.data().fullName || '',
-          dni: d.data().dni || '',
-          phone: d.data().phone || '',
-          obraSocial: d.data().obraSocial || '',
-          email: d.data().email || '',
-        })));
+        setPatients(snap.docs
+          .map(d => ({
+            uid: d.id,
+            fullName: d.data().fullName || '',
+            dni: d.data().dni || '',
+            phone: d.data().phone || '',
+            obraSocial: d.data().obraSocial || '',
+            email: d.data().email || '',
+            role: d.data().role,
+          }))
+          .filter(p => p.role === 'PACIENTE' || !p.role)
+        );
       } catch (e) { console.error(e); } finally { setLoading(false); }
     };
     fetchPatients();
@@ -46,8 +51,11 @@ export default function PatientsPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar role={user.role} />
-      <main className="flex-1 p-8 max-w-6xl mx-auto space-y-8">
+      <div className="hidden lg:block">
+        <Sidebar role={user.role} />
+      </div>
+      <MobileHeader role={user.role} />
+      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Directorio de Pacientes</h1>

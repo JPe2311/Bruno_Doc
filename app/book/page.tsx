@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, doc, getDoc, writeBatch, addDoc, ser
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { 
@@ -162,6 +163,7 @@ function BookAppointmentContent() {
       });
       const newPatient: Patient = { uid: userRef.id, ...newPatientForm };
       setPatients(prev => [...prev, newPatient]);
+      setPatients(prev => prev.map(p => p.uid === newPatient.uid ? { ...p, role: 'PACIENTE' } : p));
       setSelectedPatientUid(newPatient.uid);
       setSelectedPatientName(newPatientForm.fullName);
       setSelectedPatientDni(newPatientForm.dni);
@@ -223,8 +225,11 @@ function BookAppointmentContent() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar role={user.role} />
-      <main className="flex-1 p-6 max-w-7xl mx-auto">
+      <div className="hidden lg:block">
+        <Sidebar role={user.role} />
+      </div>
+      <MobileHeader role={user.role} />
+      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto pt-16 lg:pt-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-6">
           {isMedicoOrSecretaria ? 'Crear Cita para Paciente' : 'Reservar Cita'}
         </h1>

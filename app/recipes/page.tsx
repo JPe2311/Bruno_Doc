@@ -4,6 +4,7 @@ import { collection, addDoc, getDocs, query, where, getDoc, doc } from 'firebase
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
@@ -46,10 +47,14 @@ function RecipesContent() {
   const [patientSearch, setPatientSearch] = useState('');
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
 
-  const filteredPatients = patients.filter(p => {
-    const search = patientSearch.toLowerCase();
-    return p.fullName?.toLowerCase().includes(search) || p.dni?.toLowerCase().includes(search);
-  });
+  const filteredPatients = patientSearch.trim() === '' 
+    ? patients 
+    : patients.filter(p => {
+        const search = patientSearch.toLowerCase();
+        return (p.fullName?.toLowerCase().includes(search) || p.dni?.toLowerCase().includes(search));
+      });
+
+  const displayPatients = filteredPatients.length > 0 || patientSearch === '' ? filteredPatients : [];
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -73,9 +78,12 @@ function RecipesContent() {
       const snap = await getDocs(q);
       setRecipes(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
       
-      const patientsQ = query(collection(db, 'users'), where('role', '==', 'PACIENTE'));
+      const patientsQ = query(collection(db, 'users'));
       const patientsSnap = await getDocs(patientsQ);
-      setPatients(patientsSnap.docs.map(d => ({ uid: d.id, ...d.data() } as any)));
+      const allPatients = patientsSnap.docs
+        .map(d => ({ uid: d.id, ...d.data() } as any))
+        .filter(p => p.role === 'PACIENTE' || !p.role);
+      setPatients(allPatients);
     };
     fetchData();
   }, [user]);
@@ -152,8 +160,11 @@ function RecipesContent() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar role={user.role} />
-      <main className="flex-1 p-6 max-w-5xl mx-auto">
+      <div className="hidden lg:block">
+        <Sidebar role={user.role} />
+      </div>
+      <MobileHeader role={user.role} />
+      <main className="flex-1 p-4 md:p-6 max-w-5xl mx-auto pt-16 lg:pt-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Recetas / R-P</h1>
           <button onClick={() => setShowNewForm(true)} className="btn-primary">
@@ -181,9 +192,9 @@ function RecipesContent() {
                   placeholder="Buscar paciente por nombre o DNI..."
                   className="w-full border border-slate-200 rounded-lg p-3"
                 />
-                {showPatientDropdown && filteredPatients.length > 0 && (
+                {showPatientDropdown && displayPatients.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {filteredPatients.map(p => (
+                    {displayPatients.map(p => (
                       <button
                         key={p.uid}
                         type="button"
@@ -200,9 +211,9 @@ function RecipesContent() {
                     ))}
                   </div>
                 )}
-                {showPatientDropdown && patientSearch && filteredPatients.length === 0 && (
+                {showPatientDropdown && displayPatients.length === 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg p-4 text-center text-slate-500">
-                    No se encontraron pacientes
+                    {patients.length === 0 ? 'No hay pacientes registrados' : 'No se encontraron pacientes'}
                   </div>
                 )}
               </div>

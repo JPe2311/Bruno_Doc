@@ -4,6 +4,7 @@ import { collection, getDocs, getDoc, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { printReportHTML } from '@/lib/printReport';
@@ -196,9 +197,12 @@ export default function CasosListPage() {
   }
 
   return (
-    <div className="flex">
-      <Sidebar role={user.role} />
-      <main className="flex-1 p-6">
+    <div className="flex min-h-screen bg-slate-50">
+      <div className="hidden lg:block">
+        <Sidebar role={user.role} />
+      </div>
+      <MobileHeader role={user.role} />
+      <main className="flex-1 p-4 md:p-6 pt-16 lg:pt-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Casos de Atencion</h1>
           <div className="flex gap-3">

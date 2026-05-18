@@ -4,6 +4,7 @@ import { collection, query, getDocs, getDoc, doc, where, updateDoc } from 'fireb
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/MobileHeader';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Appointment, AppointmentStatus } from '@/lib/types/domain';
@@ -155,8 +156,11 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar role={role} />
-      <main className="flex-1 p-8 max-w-5xl mx-auto space-y-8">
+      <div className="hidden lg:block">
+        <Sidebar role={role} />
+      </div>
+      <MobileHeader role={role} />
+      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Agenda de Citas</h1>
