@@ -23,9 +23,10 @@ export default function ProfilePage() {
   const [clinicAddress, setClinicAddress] = useState('');
   const [clinicMaps, setClinicMaps] = useState('');
   const [authorizedUsers, setAuthorizedUsers] = useState<Array<{ uid: string; fullName: string; dni: string }>>([]);
-  const [allPatients, setAllPatients] = useState<Array<{ uid: string; fullName: string; dni: string }>>([]);
   const [showAddAuthModal, setShowAddAuthModal] = useState(false);
-  const [selectedAuthUid, setSelectedAuthUid] = useState('');
+  const [searchDni, setSearchDni] = useState('');
+  const [searchedPatient, setSearchedPatient] = useState<{ uid: string; fullName: string; dni: string } | null>(null);
+  const [searching, setSearching] = useState(false);
   const [addingAuth, setAddingAuth] = useState(false);
 
   useEffect(() => {
@@ -70,16 +71,6 @@ export default function ProfilePage() {
       }
     };
     fetchAssets();
-  }, [user]);
-
-  useEffect(() => {
-    if (user?.role !== 'PACIENTE') return;
-    const fetchPatients = async () => {
-      const q = query(collection(db, 'users'), where('role', '==', 'PACIENTE'));
-      const snap = await getDocs(q);
-      setAllPatients(snap.docs.filter(d => d.id !== user.uid).map(d => ({ uid: d.id, fullName: d.data().fullName || '', dni: d.data().dni || '' })));
-    };
-    fetchPatients();
   }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -296,45 +287,84 @@ export default function ProfilePage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-bold text-slate-900 mb-4">Agregar Tercer Autorizado</h3>
-              <p className="text-sm text-slate-600 mb-4">Selecciona un paciente para autorizarlo a solicitar turnos a tu nombre.</p>
-              <select
-                value={selectedAuthUid}
-                onChange={(e) => setSelectedAuthUid(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg p-3 mb-4"
-              >
-                <option value="">Seleccionar paciente...</option>
-                {allPatients
-                  .filter(p => !authorizedUsers.some(a => a.uid === p.uid))
-                  .map(p => (
-                    <option key={p.uid} value={p.uid}>
-                      {p.fullName} {p.dni ? `(${p.dni})` : ''}
-                    </option>
-                  ))}
-              </select>
+              <p className="text-sm text-slate-600 mb-4">Ingresa el DNI del paciente que deseas autorizar para solicitar turnos a tu nombre.</p>
+              
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="Ingrese DNI"
+                  value={searchDni}
+                  onChange={(e) => { setSearchDni(e.target.value); setSearchedPatient(null); }}
+                  className="flex-1 border border-slate-200 rounded-lg p-3"
+                />
+                <button
+                  onClick={async () => {
+                    if (!searchDni.trim()) {
+                      toast.error('Ingrese un DNI');
+                      return;
+                    }
+                    setSearching(true);
+                    try {
+                      const q = query(collection(db, 'users'), where('dni', '==', searchDni.trim()), where('role', '==', 'PACIENTE'));
+                      const snap = await getDocs(q);
+                      if (snap.empty) {
+                        toast.error('No se encontró paciente con ese DNI');
+                        setSearchedPatient(null);
+                      } else {
+                        const doc = snap.docs[0];
+                        if (doc.id === user.uid) {
+                          toast.error('No puede autorizarse a sí mismo');
+                          setSearchedPatient(null);
+                        } else if (authorizedUsers.some(a => a.uid === doc.id)) {
+                          toast.error('Este paciente ya está autorizado');
+                          setSearchedPatient(null);
+                        } else {
+                          setSearchedPatient({ uid: doc.id, fullName: doc.data().fullName || '', dni: doc.data().dni || '' });
+                        }
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Error al buscar paciente');
+                    } finally {
+                      setSearching(false);
+                    }
+                  }}
+                  disabled={searching}
+                  className="btn-secondary !py-2 !px-4"
+                >
+                  {searching ? 'Buscando...' : 'Buscar'}
+                </button>
+              </div>
+              
+              {searchedPatient && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
+                  <p className="text-sm font-medium text-green-800">Paciente encontrado:</p>
+                  <p className="text-sm text-green-700">{searchedPatient.fullName} (DNI: {searchedPatient.dni})</p>
+                </div>
+              )}
+              
               <div className="flex gap-3">
                 <button
-                  onClick={() => { setShowAddAuthModal(false); setSelectedAuthUid(''); }}
+                  onClick={() => { setShowAddAuthModal(false); setSearchDni(''); setSearchedPatient(null); }}
                   className="flex-1 btn-secondary"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={async () => {
-                    if (!selectedAuthUid) {
-                      toast.error('Selecciona un paciente');
+                    if (!searchedPatient) {
+                      toast.error('Busque un paciente primero');
                       return;
                     }
                     setAddingAuth(true);
                     try {
                       const currentAuth = authorizedUsers.map(a => a.uid);
-                      const newAuth = [...currentAuth, selectedAuthUid];
+                      const newAuth = [...currentAuth, searchedPatient.uid];
                       await setDoc(doc(db, 'users', user.uid), { authorizedUsers: newAuth }, { merge: true });
-                      const selectedPatient = allPatients.find(p => p.uid === selectedAuthUid);
-                      if (selectedPatient) {
-                        setAuthorizedUsers([...authorizedUsers, selectedPatient]);
-                      }
+                      setAuthorizedUsers([...authorizedUsers, searchedPatient]);
                       setShowAddAuthModal(false);
-                      setSelectedAuthUid('');
+                      setSearchDni('');
+                      setSearchedPatient(null);
                       toast.success('Tercer autorizado agregado');
                     } catch (err) {
                       console.error(err);
@@ -343,8 +373,8 @@ export default function ProfilePage() {
                       setAddingAuth(false);
                     }
                   }}
-                  disabled={addingAuth}
-                  className="flex-1 btn-primary"
+                  disabled={addingAuth || !searchedPatient}
+                  className="flex-1 btn-primary disabled:opacity-50"
                 >
                   {addingAuth ? 'Agregando...' : 'Agregar'}
                 </button>
