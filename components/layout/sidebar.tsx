@@ -55,7 +55,7 @@ export function Sidebar({ role }: { role: string }) {
     pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col"
+    <aside className="fixed left-0 top-0 w-64 min-h-screen flex flex-col z-40"
       style={{ background: 'linear-gradient(180deg,#0f2044 0%,#0a1628 100%)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
       {/* Logo & role */}
