@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase/client';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -22,6 +22,11 @@ export default function ProfilePage() {
   });
   const [clinicAddress, setClinicAddress] = useState('');
   const [clinicMaps, setClinicMaps] = useState('');
+  const [authorizedUsers, setAuthorizedUsers] = useState<Array<{ uid: string; fullName: string; dni: string }>>([]);
+  const [allPatients, setAllPatients] = useState<Array<{ uid: string; fullName: string; dni: string }>>([]);
+  const [showAddAuthModal, setShowAddAuthModal] = useState(false);
+  const [selectedAuthUid, setSelectedAuthUid] = useState('');
+  const [addingAuth, setAddingAuth] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -52,9 +57,29 @@ export default function ProfilePage() {
         if (data.stampURL) setStampURL(data.stampURL);
         if (data.clinicAddress) setClinicAddress(data.clinicAddress);
         if (data.clinicMaps) setClinicMaps(data.clinicMaps);
+        if (data.authorizedUsers) {
+          const authUsers: Array<{ uid: string; fullName: string; dni: string }> = [];
+          for (const uid of data.authorizedUsers) {
+            const userSnap = await getDoc(doc(db, 'users', uid));
+            if (userSnap.exists()) {
+              authUsers.push({ uid, fullName: userSnap.data().fullName || '', dni: userSnap.data().dni || '' });
+            }
+          }
+          setAuthorizedUsers(authUsers);
+        }
       }
     };
     fetchAssets();
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== 'PACIENTE') return;
+    const fetchPatients = async () => {
+      const q = query(collection(db, 'users'), where('role', '==', 'PACIENTE'));
+      const snap = await getDocs(q);
+      setAllPatients(snap.docs.filter(d => d.id !== user.uid).map(d => ({ uid: d.id, fullName: d.data().fullName || '', dni: d.data().dni || '' })));
+    };
+    fetchPatients();
   }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +184,43 @@ export default function ProfilePage() {
           </button>
         </form>
 
+        {user.role === 'PACIENTE' && (
+          <div className="card space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Terceros Autorizados</h2>
+              <button onClick={() => setShowAddAuthModal(true)} className="text-sm text-blue-600 font-medium hover:underline">
+                + Agregar
+              </button>
+            </div>
+            <p className="text-sm text-slate-500">Personas autorizadas para solicitar turnos a tu nombre.</p>
+            {authorizedUsers.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No hay terceros autorizados agregados.</p>
+            ) : (
+              <ul className="space-y-2">
+                {authorizedUsers.map(u => (
+                  <li key={u.uid} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{u.fullName}</p>
+                      <p className="text-xs text-slate-500">{u.dni || 'Sin DNI'}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newAuth = authorizedUsers.filter(a => a.uid !== u.uid).map(a => a.uid);
+                        await setDoc(doc(db, 'users', user.uid), { authorizedUsers: newAuth }, { merge: true });
+                        setAuthorizedUsers(authorizedUsers.filter(a => a.uid !== u.uid));
+                        toast.success('Autorización removida');
+                      }}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {(user.role === 'MEDICO' || (user as { role?: string }).role === 'MEDICO') && (
           <>
             <div className="card space-y-4">
@@ -228,6 +290,67 @@ export default function ProfilePage() {
               </label>
             </div>
           </>
+        )}
+
+        {showAddAuthModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Agregar Tercer Autorizado</h3>
+              <p className="text-sm text-slate-600 mb-4">Selecciona un paciente para autorizarlo a solicitar turnos a tu nombre.</p>
+              <select
+                value={selectedAuthUid}
+                onChange={(e) => setSelectedAuthUid(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg p-3 mb-4"
+              >
+                <option value="">Seleccionar paciente...</option>
+                {allPatients
+                  .filter(p => !authorizedUsers.some(a => a.uid === p.uid))
+                  .map(p => (
+                    <option key={p.uid} value={p.uid}>
+                      {p.fullName} {p.dni ? `(${p.dni})` : ''}
+                    </option>
+                  ))}
+              </select>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowAddAuthModal(false); setSelectedAuthUid(''); }}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedAuthUid) {
+                      toast.error('Selecciona un paciente');
+                      return;
+                    }
+                    setAddingAuth(true);
+                    try {
+                      const currentAuth = authorizedUsers.map(a => a.uid);
+                      const newAuth = [...currentAuth, selectedAuthUid];
+                      await setDoc(doc(db, 'users', user.uid), { authorizedUsers: newAuth }, { merge: true });
+                      const selectedPatient = allPatients.find(p => p.uid === selectedAuthUid);
+                      if (selectedPatient) {
+                        setAuthorizedUsers([...authorizedUsers, selectedPatient]);
+                      }
+                      setShowAddAuthModal(false);
+                      setSelectedAuthUid('');
+                      toast.success('Tercer autorizado agregado');
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Error al agregar autorización');
+                    } finally {
+                      setAddingAuth(false);
+                    }
+                  }}
+                  disabled={addingAuth}
+                  className="flex-1 btn-primary"
+                >
+                  {addingAuth ? 'Agregando...' : 'Agregar'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

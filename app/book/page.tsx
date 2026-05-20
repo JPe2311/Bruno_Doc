@@ -73,14 +73,17 @@ function BookAppointmentContent() {
   const [loadingDoctors, setLoadingDoctors] = useState(true);
   
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [relatedPatients, setRelatedPatients] = useState<Patient[]>([]);
   const [selectedPatientUid, setSelectedPatientUid] = useState('');
   const [selectedPatientName, setSelectedPatientName] = useState('');
   const [selectedPatientDni, setSelectedPatientDni] = useState('');
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
   const [newPatientForm, setNewPatientForm] = useState({ fullName: '', dni: '', phone: '', email: '', obraSocial: '', address: '', birthDate: '' });
   const [savingPatient, setSavingPatient] = useState(false);
+  const [bookingForSelf, setBookingForSelf] = useState(true);
 
   const isMedicoOrSecretaria = user?.role === 'MEDICO' || user?.role === 'SECRETARIA';
+  const isPaciente = user?.role === 'PACIENTE';
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -94,6 +97,23 @@ function BookAppointmentContent() {
       const q = query(collection(db, 'users'), where('role', '==', 'PACIENTE'));
       const snap = await getDocs(q);
       setPatients(snap.docs.map(d => ({ uid: d.id, ...d.data() } as Patient)));
+      
+      if (user.role === 'PACIENTE') {
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        const userData = userSnap.data();
+        
+        const related = snap.docs
+          .filter(d => d.data().responsibleUid === user.uid)
+          .map(d => ({ uid: d.id, ...d.data() } as Patient));
+        setRelatedPatients(related);
+        
+        if (userData?.authorizedUsers) {
+          const authorized = snap.docs
+            .filter(d => userData.authorizedUsers.includes(d.id))
+            .map(d => ({ uid: d.id, ...d.data() } as Patient));
+          setRelatedPatients(prev => [...prev, ...authorized]);
+        }
+      }
     };
     fetchPatients();
   }, [user]);
@@ -167,15 +187,21 @@ function BookAppointmentContent() {
     setSavingPatient(true);
     try {
       const userRef = doc(collection(db, 'users'));
-      await setDoc(userRef, {
+      const patientData = {
         ...newPatientForm,
         role: 'PACIENTE',
         onboardingCompleted: false,
         createdAt: new Date().toISOString(),
-      });
-      const newPatient: Patient = { uid: userRef.id, ...newPatientForm };
+      };
+      if (user?.role === 'PACIENTE') {
+        patientData.responsibleUid = user.uid;
+      }
+      await setDoc(userRef, patientData);
+      const newPatient: Patient = { uid: userRef.id, ...newPatientForm, role: 'PACIENTE' };
       setPatients(prev => [...prev, newPatient]);
-      setPatients(prev => prev.map(p => p.uid === newPatient.uid ? { ...p, role: 'PACIENTE' } : p));
+      if (user?.role === 'PACIENTE') {
+        setRelatedPatients(prev => [...prev, newPatient]);
+      }
       setSelectedPatientUid(newPatient.uid);
       setSelectedPatientName(newPatientForm.fullName);
       setSelectedPatientDni(newPatientForm.dni);
@@ -310,6 +336,59 @@ function BookAppointmentContent() {
                     + Nuevo
                   </button>
                 </div>
+              </div>
+            )}
+
+            {isPaciente && (
+              <div className="card">
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">¿Para quién es el turno?</h2>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => { setBookingForSelf(true); setSelectedPatientUid(user.uid); setSelectedPatientName(user.fullName || ''); setSelectedPatientDni(''); }}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${bookingForSelf ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  >
+                    Para mí
+                  </button>
+                  <button
+                    onClick={() => { setBookingForSelf(false); setSelectedPatientUid(''); setSelectedPatientName(''); setSelectedPatientDni(''); }}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${!bookingForSelf ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  >
+                    Tercer autorizado
+                  </button>
+                </div>
+                
+                {!bookingForSelf && (
+                  <div className="space-y-3">
+                    {relatedPatients.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 mb-2">Mis dependientes y pacientes que me autorizaron</p>
+                        <select
+                          value={selectedPatientUid}
+                          onChange={e => {
+                            const p = relatedPatients.find(p => p.uid === e.target.value);
+                            setSelectedPatientUid(e.target.value);
+                            setSelectedPatientName(p?.fullName || '');
+                            setSelectedPatientDni(p?.dni || '');
+                          }}
+                          className="w-full border border-slate-200 rounded-lg p-3"
+                        >
+                          <option value="">Seleccionar...</option>
+                          {relatedPatients.map(p => (
+                            <option key={p.uid} value={p.uid}>
+                              {p.fullName} {p.dni ? `(${p.dni})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowNewPatientModal(true)} className="btn-secondary !py-2 !px-4 text-sm">
+                        + Crear nuevo dependiente
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

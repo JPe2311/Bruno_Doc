@@ -33,11 +33,9 @@ function buildReportHTML(caso: Caso, stampURL: string, bannerURL: string, doctor
     <h3>Datos del Paciente</h3>
     <div class="patient-grid">
       <p><span class="label">Nombre:</span> ${escapeHtml(caso.patientData.fullName)}</p>
+      <p><span class="label">Fecha de Nacimiento:</span> ${caso.patientData.birthDate ? new Date(caso.patientData.birthDate).toLocaleDateString('es-ES') : '-'}</p>
+      <p><span class="label">Obra Social:</span> ${escapeHtml(caso.patientData.obraSocial || 'Particular')}</p>
       <p><span class="label">DNI:</span> ${escapeHtml(caso.patientData.dni)}</p>
-      <p><span class="label">Obra Social:</span> ${escapeHtml(caso.patientData.obraSocial || '-')}</p>
-      <p><span class="label">Teléfono:</span> ${escapeHtml(caso.patientData.phone)}</p>
-      <p><span class="label">Dirección:</span> ${escapeHtml(caso.patientData.address)}</p>
-      <p><span class="label">Médico:</span> ${escapeHtml(caso.doctorName || doctorName)}</p>
     </div>
   </div>`);
 
@@ -113,6 +111,7 @@ export default function PatientDetailPage() {
           setPatientData({
             fullName: d.fullName || '', dni: d.dni || '', phone: d.phone || '',
             obraSocial: d.obraSocial || '', email: d.email || '', address: d.address || '',
+            birthDate: d.birthDate || '',
           });
         }
 
