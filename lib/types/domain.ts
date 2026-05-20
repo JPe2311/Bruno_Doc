@@ -94,4 +94,4 @@ export interface Recipe {
 
 export type Role = 'MEDICO' | 'SECRETARIA' | 'PACIENTE';
 
-export type AppointmentStatus = 'pending' | 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'pending' | 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'attended';
