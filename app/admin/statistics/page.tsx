@@ -175,7 +175,7 @@ export default function StatisticsPage() {
         <Sidebar role={user.role} />
       </div>
       <MobileHeader role={user.role} />
-      <main className="flex-1 p-4 md:p-6 max-w-6xl mx-auto pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 max-w-6xl mx-auto pt-16 lg:pt-6 lg:ml-64">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Estadísticas de la Clínica</h1>
           <div className="flex flex-wrap gap-2">
@@ -199,7 +199,7 @@ export default function StatisticsPage() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="card">
-                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total Citas</p>
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total Turnos</p>
                 <p className="text-3xl font-bold text-slate-900">{stats.totalAppointments}</p>
                 <p className="text-xs text-slate-500 mt-1">
                   {stats.confirmedAppointments} confirmadas • {stats.cancelledAppointments} canceladas
@@ -302,15 +302,15 @@ export default function StatisticsPage() {
                 <h3 className="font-semibold text-slate-900 mb-4">Resumen del Período</h3>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Citas programadas</span>
+                    <span className="text-slate-600">Turnos programados</span>
                     <span className="font-medium text-slate-900">{stats.totalAppointments}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Citas confirmadas</span>
+                    <span className="text-slate-600">Turnos confirmados</span>
                     <span className="font-medium text-green-600">{stats.confirmedAppointments}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Citas canceladas</span>
+                    <span className="text-slate-600">Turnos cancelados</span>
                     <span className="font-medium text-red-600">{stats.cancelledAppointments}</span>
                   </div>
                   <div className="flex justify-between">

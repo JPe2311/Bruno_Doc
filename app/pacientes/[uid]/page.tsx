@@ -61,7 +61,7 @@ export default function PatientDetailPage() {
   const params = useParams();
   const patientUid = params?.uid as string;
 
-  const [patientData, setPatientData] = useState<{ fullName: string; dni: string; phone: string; obraSocial: string; email: string; address: string } | null>(null);
+  const [patientData, setPatientData] = useState<{ fullName: string; dni: string; phone: string; obraSocial: string; email: string; address: string; birthDate?: string } | null>(null);
   const [casos, setCasos] = useState<(Caso & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [doctorAssets, setDoctorAssets] = useState<Record<string, { stampURL: string; bannerURL: string }>>({});
@@ -150,7 +150,7 @@ export default function PatientDetailPage() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar role={user.role} />
-      <main className="flex-1 p-8 max-w-5xl mx-auto space-y-8">
+      <main className="flex-1 p-8 max-w-5xl mx-auto space-y-8 lg:ml-64">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <button onClick={() => router.back()} className="flex items-center gap-1 text-xs font-bold text-blue-600 uppercase tracking-widest hover:text-blue-700 transition-colors mb-2">
@@ -187,6 +187,7 @@ export default function PatientDetailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
                     { label: 'DNI / Identificación', value: patientData.dni },
+                    { label: 'Fecha de Nacimiento', value: patientData.birthDate ? new Date(patientData.birthDate).toLocaleDateString('es-ES') : '-' },
                     { label: 'Obra Social', value: patientData.obraSocial || 'Particular', isBadge: true },
                     { label: 'Teléfono', value: patientData.phone, isPhone: true },
                     { label: 'Email', value: patientData.email },

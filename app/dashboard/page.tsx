@@ -78,7 +78,7 @@ export default function DashboardPage() {
         <Sidebar role={user.role} />
       </div>
       <MobileHeader role={user.role} />
-      <main className="flex-1 p-4 md:p-6 max-w-4xl mx-auto space-y-6 pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 max-w-4xl mx-auto space-y-6 pt-16 lg:pt-6 lg:ml-64">
         <header className="flex items-center justify-between">
           <div>
             <p className="text-sm text-slate-500">
@@ -89,7 +89,7 @@ export default function DashboardPage() {
             </h1>
           </div>
           <div className="lg:hidden text-right">
-            <p className="text-xs text-slate-500">Citas hoy</p>
+            <p className="text-xs text-slate-500">Turnos hoy</p>
             <p className="text-2xl font-bold text-blue-600">{todayAppointments.length}</p>
           </div>
         </header>
@@ -117,7 +117,7 @@ export default function DashboardPage() {
           <div className="card bg-gradient-to-r from-sky-500 to-blue-600 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sky-100 text-sm font-medium">Citas para hoy</p>
+                <p className="text-sky-100 text-sm font-medium">Turnos para hoy</p>
                 <p className="text-4xl font-bold">{loading ? '...' : todayAppointments.length}</p>
               </div>
               <svg className="w-12 h-12 text-sky-200 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +207,7 @@ export default function DashboardPage() {
 
         {isMedicoOrSecretaria && todayAppointments.length > 0 && (
           <div className="card">
-            <h3 className="font-semibold text-slate-900 mb-4">Citas de Hoy</h3>
+            <h3 className="font-semibold text-slate-900 mb-4">Turnos de Hoy</h3>
             <div className="space-y-3">
               {todayAppointments.slice(0, 5).map((a) => (
                 <div key={a.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">

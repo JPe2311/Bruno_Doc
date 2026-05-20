@@ -169,7 +169,7 @@ function RecipesContent() {
         <Sidebar role={user.role} />
       </div>
       <MobileHeader role={user.role} />
-      <main className="flex-1 p-4 md:p-6 max-w-5xl mx-auto pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 max-w-5xl mx-auto pt-16 lg:pt-6 lg:ml-64">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Recetas / R-P</h1>
           <button onClick={() => setShowNewForm(true)} className="btn-primary">

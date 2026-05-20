@@ -6,6 +6,7 @@ export interface Patient {
   address: string;
   dni: string;
   obraSocial: string;
+  birthDate?: string;
   role: Role;
   createdAt?: string;
 }

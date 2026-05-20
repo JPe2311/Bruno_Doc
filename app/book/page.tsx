@@ -77,7 +77,7 @@ function BookAppointmentContent() {
   const [selectedPatientName, setSelectedPatientName] = useState('');
   const [selectedPatientDni, setSelectedPatientDni] = useState('');
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
-  const [newPatientForm, setNewPatientForm] = useState({ fullName: '', dni: '', phone: '', email: '', obraSocial: '', address: '' });
+  const [newPatientForm, setNewPatientForm] = useState({ fullName: '', dni: '', phone: '', email: '', obraSocial: '', address: '', birthDate: '' });
   const [savingPatient, setSavingPatient] = useState(false);
 
   const isMedicoOrSecretaria = user?.role === 'MEDICO' || user?.role === 'SECRETARIA';
@@ -180,7 +180,7 @@ function BookAppointmentContent() {
       setSelectedPatientName(newPatientForm.fullName);
       setSelectedPatientDni(newPatientForm.dni);
       setShowNewPatientModal(false);
-      setNewPatientForm({ fullName: '', dni: '', phone: '', email: '', obraSocial: '', address: '' });
+      setNewPatientForm({ fullName: '', dni: '', phone: '', email: '', obraSocial: '', address: '', birthDate: '' });
       toast.success('Paciente creado correctamente');
     } catch (err) {
       console.error(err);
@@ -241,7 +241,7 @@ function BookAppointmentContent() {
         <Sidebar role={user.role} />
       </div>
       <MobileHeader role={user.role} />
-      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto pt-16 lg:pt-6 lg:ml-64">
         <h1 className="text-2xl font-bold text-slate-900 mb-6">
           {isMedicoOrSecretaria ? 'Crear Cita para Paciente' : 'Reservar Cita'}
         </h1>
@@ -268,6 +268,9 @@ function BookAppointmentContent() {
                   className="w-full border border-slate-200 rounded-lg p-3" />
                 <input type="text" placeholder="Dirección" value={newPatientForm.address}
                   onChange={e => setNewPatientForm({...newPatientForm, address: e.target.value})}
+                  className="w-full border border-slate-200 rounded-lg p-3" />
+                <input type="date" placeholder="Fecha de Nacimiento" value={newPatientForm.birthDate}
+                  onChange={e => setNewPatientForm({...newPatientForm, birthDate: e.target.value})}
                   className="w-full border border-slate-200 rounded-lg p-3" />
               </div>
               <div className="flex gap-3 mt-4">

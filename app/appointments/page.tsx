@@ -20,6 +20,7 @@ const STATUS_CONFIG: Record<AppointmentStatus, { label: string; color: string; b
   completed: { label: 'Completada', color: 'text-slate-700', bg: 'bg-slate-100' },
   cancelled: { label: 'Cancelada', color: 'text-red-700', bg: 'bg-red-100' },
   no_show: { label: 'No asistió', color: 'text-gray-700', bg: 'bg-gray-100' },
+  attended: { label: 'Atendido', color: 'text-purple-700', bg: 'bg-purple-100' },
 };
 
 export default function AppointmentsPage() {
@@ -27,7 +28,7 @@ export default function AppointmentsPage() {
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('all');
+const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('upcoming');
   const [caseMap, setCaseMap] = useState<Set<string>>(new Set());
   const [doctorClinic, setDoctorClinic] = useState<{ address: string; maps: string; phone: string }>({ address: '', maps: '', phone: '' });
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -36,6 +37,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelAppointmentId, setCancelAppointmentId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -56,7 +58,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
         }
         const snap = await getDocs(q);
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Appointment[];
-        list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
         setAppointments(list);
 
         if (role === 'PACIENTE') {
@@ -144,13 +146,17 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
   const filteredAppointments = appointments
     .filter(a => {
       const date = parseISO(a.date);
-      const isPending = a.status === 'pending';
-      if (filter === 'upcoming') return isFuture(date) || isToday(date) || isPending;
+      if (filter === 'pending') return a.status === 'pending';
       if (filter === 'past') return isPast(date) && !isToday(date);
-      if (filter === 'pending') return isPending;
+      if (!showHistory) return isToday(date) || isFuture(date) || a.status === 'pending';
       return true;
     })
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const hasPastAppointments = appointments.some(a => {
+    const date = parseISO(a.date);
+    return isPast(date) && !isToday(date);
+  });
 
   if (authLoading || !user) {
     return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="spinner" /></div>;
@@ -162,10 +168,10 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
         <Sidebar role={role} />
       </div>
       <MobileHeader role={role} />
-      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6 lg:ml-64">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Agenda de Citas</h1>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Agenda de Turnos</h1>
             <p className="text-slate-500 mt-1">Gestiona tus consultas y horarios</p>
           </div>
           {role === 'PACIENTE' && (
@@ -315,6 +321,24 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
                                       </button>
                                     )}
+                                    {isDoctor && (isPending || isConfirmed) && (
+                                      <button 
+                                        onClick={async () => {
+                                          try {
+                                            await updateDoc(doc(db, 'appointments', a.id), { status: 'attended' });
+                                            setAppointments((prev) => prev.map((apt) => (apt.id === a.id ? { ...apt, status: 'attended' as AppointmentStatus } : apt)));
+                                            toast.success('Cita marcada como atendida');
+                                          } catch (err) {
+                                            console.error(err);
+                                            toast.error('Error al actualizar');
+                                          }
+                                        }} 
+                                        className="p-1 text-purple-600 hover:bg-purple-100 rounded" 
+                                        title="Atender"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -334,6 +358,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
               const date = parseISO(a.date);
               const isPending = a.status === 'pending';
               const isConfirmed = a.status === 'confirmed';
+              const isAttended = a.status === 'attended';
               
               return (
                 <div key={a.id} className="card group hover:border-blue-200 transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -381,8 +406,8 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                         </button>
                       </>
                     )}
-                    {isDoctor && isConfirmed && (
-                      <div className="flex gap-2">
+                    {isDoctor && (isConfirmed || isPending) && (
+                      <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={async () => {
                             try {
@@ -397,7 +422,9 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                                   patientEmail: patientData.email || '',
                                   patientObraSocial: patientData.obraSocial || '',
                                   patientAddress: patientData.address || '',
+                                  patientBirthDate: patientData.birthDate || '',
                                   appointmentDate: a.date,
+                                  markAttended: 'true',
                                 });
                                 router.push(`/casos/nuevo?${params.toString()}`);
                               }
@@ -441,6 +468,24 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
                           </svg>
                           WhatsApp
                         </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, 'appointments', a.id), { status: 'attended' });
+                              setAppointments((prev) => prev.map((apt) => (apt.id === a.id ? { ...apt, status: 'attended' as AppointmentStatus } : apt)));
+                              toast.success('Cita marcada como atendida');
+                            } catch (err) {
+                              console.error(err);
+                              toast.error('Error al actualizar');
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs hover:shadow-lg transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Atender
+                        </button>
                       </div>
                     )}
                     {role === 'PACIENTE' && isPast(date) && !isToday(date) && caseMap.has(a.date.slice(0, 10)) && (
@@ -468,6 +513,28 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('a
               );
             })}
           </div>
+          
+          {hasPastAppointments && !showHistory && viewMode === 'list' && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Ver más (Historial)
+              </button>
+            </div>
+          )}
+          
+          {showHistory && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={() => setShowHistory(false)}
+                className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Ver menos
+              </button>
+            </div>
+          )}
         )}
 
         {showCancelModal && (

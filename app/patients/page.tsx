@@ -55,7 +55,7 @@ export default function PatientsPage() {
         <Sidebar role={user.role} />
       </div>
       <MobileHeader role={user.role} />
-      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 lg:space-y-8 pt-16 lg:pt-6 lg:ml-64">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Directorio de Pacientes</h1>

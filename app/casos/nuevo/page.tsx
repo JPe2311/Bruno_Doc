@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, getDocs, addDoc, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, where, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -16,6 +16,7 @@ interface PatientOption {
   address: string;
   phone: string;
   email: string;
+  birthDate?: string;
 }
 
 interface TipologiaOption {
@@ -39,6 +40,7 @@ export default function NuevoCasoPage() {
   const [saved, setSaved] = useState(false);
   const [bannerURL, setBannerURL] = useState('');
   const [stampURL, setStampURL] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState('');
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -82,12 +84,14 @@ export default function NuevoCasoPage() {
           address: params.get('patientAddress') || '',
           phone: params.get('patientPhone') || '',
           email: params.get('patientEmail') || '',
+          birthDate: params.get('patientBirthDate') || '',
         };
         setSelectedPatient(prefill);
         
         // Set description with appointment date
         const apptDate = params.get('appointmentDate');
         if (apptDate) {
+          setAppointmentDate(apptDate);
           const dateObj = new Date(apptDate);
           const dateStr = dateObj.toLocaleDateString('es-ES', { 
             year: 'numeric', month: 'long', day: 'numeric', 
@@ -160,6 +164,7 @@ export default function NuevoCasoPage() {
           address: selectedPatient.address,
           phone: selectedPatient.phone,
           email: selectedPatient.email,
+          birthDate: selectedPatient.birthDate || '',
         },
         doctorUid: user.uid,
         doctorName: user.fullName,
@@ -172,6 +177,22 @@ export default function NuevoCasoPage() {
         createdAt: new Date().toISOString(),
       });
       toast.success('Caso registrado correctamente');
+      
+      // Mark appointment as attended if it was from a scheduled appointment
+      if (appointmentDate) {
+        const q = query(
+          collection(db, 'appointments'),
+          where('patientUid', '==', selectedPatient.uid),
+          where('date', '>=', appointmentDate),
+          where('date', '<=', appointmentDate)
+        );
+        const snap = await getDocs(q);
+        const apt = snap.docs.find(d => d.data().date === appointmentDate);
+        if (apt) {
+          await updateDoc(doc(db, 'appointments', apt.id), { status: 'attended' });
+        }
+      }
+      
       setSaved(true);
     } catch (err) {
       console.error(err);
