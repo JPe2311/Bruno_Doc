@@ -215,27 +215,17 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
                 {labels[f]}
               </button>
             );
-          })}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-20"><div className="spinner" /></div>
-        ) : filteredAppointments.length === 0 ? (
-          <div className="card text-center py-24 flex flex-col items-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-            <p className="text-slate-500 font-medium">No se encontraron citas</p>
-            {role === 'PACIENTE' && <Link href="/book" className="text-blue-600 font-semibold mt-2 hover:underline">Solicitar mi primera cita</Link>}
+})}
           </div>
-        ) : viewMode === 'calendar' ? (
+        
+        {!loading && filteredAppointments.length > 0 && viewMode === 'calendar' && (
           <div className="space-y-3">
             {(() => {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
               
               const allDays: string[] = [];
-              const dayMap: Record<string, Appointment[]> = {};
+              const dayMap: Record<string, typeof filteredAppointments> = {};
               
               filteredAppointments.forEach((a) => {
                 const dayKey = a.date.slice(0, 10);
@@ -253,13 +243,10 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
                 const dayDate = parseISO(dayKey);
                 const isExpanded = expandedDays.has(dayKey);
                 const hasPending = dayAppointments.some(a => a.status === 'pending');
-                const hasConfirmed = dayAppointments.some(a => a.status === 'confirmed');
-                
-                const isPast = dayDate < today;
-                const isToday = isSameDay(dayDate, today);
+                const isPastDay = dayDate < today;
                 
                 return (
-                  <div key={dayKey} className={`border rounded-xl overflow-hidden ${isPast ? 'opacity-60' : ''}`}>
+                  <div key={dayKey} className={`border rounded-xl overflow-hidden ${isPastDay ? 'opacity-60' : ''}`}>
                     <button
                       onClick={() => {
                         const newExpanded = new Set(expandedDays);
@@ -268,30 +255,25 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
                         setExpandedDays(newExpanded);
                       }}
                       className={`w-full px-4 py-3 flex items-center justify-between transition-colors ${
-                        isExpanded ? 'bg-blue-50' : isToday ? 'bg-blue-50/50' : 'bg-white hover:bg-slate-50'
+                        isExpanded ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-sm ${isToday ? 'bg-blue-600 text-white' : isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>
+                        <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-sm ${isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>
                           <span className="text-[10px] font-bold">{format(dayDate, 'EEE', { locale: es })}</span>
                           <span className="font-bold">{format(dayDate, 'd')}</span>
                         </div>
                         <div className="text-left">
                           <p className="font-semibold text-slate-900 text-sm">{format(dayDate, "EEEE d 'de' MMMM", { locale: es })}</p>
                           <p className="text-xs text-slate-500">
-                            {dayAppointments.length} cita{dayAppointments.length !== 1 ? 's' : ''}
-                            {hasConfirmed && ' • Confirmadas'}
+                            {dayAppointments.length} turno{dayAppointments.length !== 1 ? 's' : ''}
                             {hasPending && ' • Pendientes'}
-                            {isToday && ' • Hoy'}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isToday && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">HOY</span>}
-                        <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                      <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
                     {isExpanded && (
                       <div className="bg-slate-50 p-3">
@@ -327,7 +309,7 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
                                           try {
                                             await updateDoc(doc(db, 'appointments', a.id), { status: 'attended' });
                                             setAppointments((prev) => prev.map((apt) => (apt.id === a.id ? { ...apt, status: 'attended' as AppointmentStatus } : apt)));
-                                            toast.success('Cita marcada como atendida');
+                                            toast.success('Turno marcado como atendido');
                                           } catch (err) {
                                             console.error(err);
                                             toast.error('Error al actualizar');
@@ -351,7 +333,9 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
               });
             })()}
           </div>
-        ) : (
+        )}
+
+        {!loading && filteredAppointments.length > 0 && viewMode !== 'calendar' && (
           <div className="grid grid-cols-1 gap-4">
             {filteredAppointments.map((a) => {
               const status = STATUS_CONFIG[a.status as AppointmentStatus] || STATUS_CONFIG.scheduled;
@@ -513,28 +497,28 @@ const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'pending'>('u
               );
             })}
           </div>
-          
-          {hasPastAppointments && !showHistory && viewMode === 'list' && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={() => setShowHistory(true)}
-                className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
-              >
-                Ver más (Historial)
-              </button>
-            </div>
-          )}
-          
-          {showHistory && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={() => setShowHistory(false)}
-                className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
-              >
-                Ver menos
-              </button>
-            </div>
-          )}
+        )}
+
+        {hasPastAppointments && !showHistory && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => setShowHistory(true)}
+              className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Ver más (Historial)
+            </button>
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => setShowHistory(false)}
+              className="px-6 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Ver menos
+            </button>
+          </div>
         )}
 
         {showCancelModal && (
